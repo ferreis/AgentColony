@@ -1,2 +1,2 @@
 Build: mkdir -p bin && javac -cp "jade.jar:src" -d bin $(find src -name "*.java")
-Rodar: java -cp "jade.jar:bin" com.colony.Main
+Rodar: java -cp "jade.jar:bin" com.colony.Main'
