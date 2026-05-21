@@ -3,16 +3,20 @@ package com.colony.model;
 import java.util.HashMap;
 import java.util.Map;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 public class ColonyResources {
     private Map<String, Integer> resources;
 
     public ColonyResources() {
-        resources = new HashMap<>();
+        resources = new ConcurrentHashMap<>();
         resources.put("madeira", 20);
         resources.put("pedra", 15);
         resources.put("ferro", 5);
         resources.put("comida", 30);
+        resources.put("agua", 30);
         resources.put("ouro", 2);
+        resources.put("vara de pesca", 0);
     }
 
     public int get(String resource) {
@@ -23,7 +27,7 @@ public class ColonyResources {
         resources.merge(resource.toLowerCase(), amount, Integer::sum);
     }
 
-    public boolean consume(String resource, int amount) {
+    public synchronized boolean consume(String resource, int amount) {
         String key = resource.toLowerCase();
         int current = resources.getOrDefault(key, 0);
         if (current >= amount) {

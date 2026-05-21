@@ -301,6 +301,24 @@ public class MapPanel extends JPanel {
             }
         }
 
+        // ─── Draw Animals ───
+        for (com.colony.model.Animal a : map.getAnimals()) {
+            int px = halfW + (int)((a.x - viewX) * scale);
+            int py = halfH + (int)((a.y - viewY) * scale);
+            int r = Math.max(4, (int)(scale * 0.6));
+            
+            g2.setColor(a.dead ? Color.GRAY : (a.aggressive ? Color.RED : new Color(139, 69, 19)));
+            g2.fillOval(px - r/2, py - r/2, r, r);
+            
+            if (scale >= 6) {
+                g2.setColor(Color.WHITE);
+                g2.setFont(new Font("SansSerif", Font.BOLD, Math.max(9, (int)(scale/1.5))));
+                String icon = a.dead ? "\u2620" : (a.aggressive ? "\uD83D\uDC3A" : "\uD83E\uDD8C"); // Caveira, Lobo ou Cervo
+                FontMetrics fm = g2.getFontMetrics();
+                g2.drawString(icon, px - fm.stringWidth(icon)/2, py + r);
+            }
+        }
+
         // ─── Draw NPCs ───
         for (Map.Entry<String, int[]> npc : npcPositions.entrySet()) {
             int[] pos = npc.getValue();

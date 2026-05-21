@@ -64,7 +64,7 @@ public class ColonyGUI {
         tabs.addTab("Mapa", mapScroll);
 
         // ---- WORKERS TAB ----
-        workerModel = new DefaultTableModel(new String[]{"Trabalhador", "Tipo", "Habilidade", "Nível", "Rank", "Status", "Energia"}, 0) {
+        workerModel = new DefaultTableModel(new String[]{"Trabalhador", "Tipo", "Habilidade", "Nível", "Rank", "Status", "Energia", "Fome", "Sede"}, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
         workerTable = new JTable(workerModel);
@@ -118,8 +118,7 @@ public class ColonyGUI {
         resourceArea.setEditable(false);
         resourceArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
         resourceArea.setBackground(new Color(245, 240, 230));
-        ColonyResources res = new ColonyResources();
-        updateResourceDisplay(res);
+        updateResourceDisplay(Main.resources);
         JScrollPane resScroll = new JScrollPane(resourceArea);
         resScroll.setBorder(BorderFactory.createTitledBorder("Recursos"));
         tabs.addTab("Recursos", resScroll);
@@ -165,7 +164,7 @@ public class ColonyGUI {
     }
 
     public void updateWorker(String name, String skill, String level,
-                               String rank, String status, String energia) {
+                               String rank, String status, String energia, String fome, String sede) {
         SwingUtilities.invokeLater(() -> {
             String skillPt = traduzirSkill(skill);
             for (int i = 0; i < workerModel.getRowCount(); i++) {
@@ -175,12 +174,14 @@ public class ColonyGUI {
                     workerModel.setValueAt(rank, i, 4);
                     workerModel.setValueAt(status, i, 5);
                     workerModel.setValueAt(energia, i, 6);
+                    workerModel.setValueAt(fome, i, 7);
+                    workerModel.setValueAt(sede, i, 8);
                     updateStats();
                     return;
                 }
             }
             String type = traduzirTipo(skill);
-            workerModel.addRow(new Object[]{name, type, skillPt, level, rank, status, energia});
+            workerModel.addRow(new Object[]{name, type, skillPt, level, rank, status, energia, fome, sede});
             updateStats();
         });
     }

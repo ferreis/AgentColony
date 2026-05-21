@@ -16,6 +16,8 @@ public class WorkerAgent extends Agent {
     private String workerType;
     private int health = 100;
     private int energy = 100;
+    private int fome = 100;
+    private int sede = 100;
     private DwarfSkills skills = new DwarfSkills();
     private SkillType primarySkill;
     private boolean regAnalyst = false;
@@ -118,6 +120,20 @@ public class WorkerAgent extends Agent {
         // Periodic info report to manager
         addBehaviour(new TickerBehaviour(this, 5000) {
             protected void onTick() {
+                if (health <= 0 || fome <= 0 || sede <= 0) {
+                    sendGui("LOG: ☠️ " + npcName + " MORREU (Fome:" + fome + " Sede:" + sede + " HP:" + health + ")");
+                    doDelete();
+                    return;
+                }
+
+                int dropRate = (health < 100) ? 2 : 1;
+                fome -= dropRate;
+                sede -= dropRate;
+
+                if (health < 100) {
+                    health = Math.min(100, health + 2); // Regen lentamente
+                }
+
                 if (regManager) {
                     sendInfoToManager();
                 }
@@ -130,7 +146,7 @@ public class WorkerAgent extends Agent {
             Main.colonyMap.setNpcPosition(npcName, npcX, npcY);
             sendGui("NPC_POSITION:" + npcName + ":" + npcX + ":" + npcY);
             sendGui("WORKER_STATUS:" + npcName + ":" + primarySkill.getKey()
-                + ":" + skills.getLevel(primarySkill) + ":" + skills.getRank(primarySkill) + ":ocioso:" + energy);
+                + ":" + skills.getLevel(primarySkill) + ":" + skills.getRank(primarySkill) + ":ocioso:" + energy + ":" + fome + ":" + sede);
             sendWorkerDetails();
             sendGui("LOG:" + npcName + " (" + traduzirTipo(workerType) + ") registrado.");
         }
@@ -185,7 +201,13 @@ public class WorkerAgent extends Agent {
         String t = taskType.toLowerCase();
         boolean isRaw = RAW_TASKS.stream().anyMatch(t::contains);
 
-        // Rejeita se estiver muito cansado
+        // Rejeita se estiver muito cansado ou machucado
+        if (health < 100) {
+            sendGui("LOG:" + npcName + " está ferido (HP=" + health + "), rejeitou tarefa");
+            sendReject(taskId);
+            return;
+        }
+
         if (energy < 15) {
             sendGui("LOG:" + npcName + " está exausto (energia=" + energy + "), rejeitou tarefa");
             sendReject(taskId);
@@ -214,7 +236,7 @@ public class WorkerAgent extends Agent {
         currentTaskId = taskId;
         int skLv = skills.getLevel(taskSkill);
         sendGui("WORKER_STATUS:" + npcName + ":" + taskSkill.getKey()
-            + ":" + skLv + ":" + skills.getRank(taskSkill) + ":ocupado:" + energy);
+            + ":" + skLv + ":" + skills.getRank(taskSkill) + ":ocupado:" + energy + ":" + fome + ":" + sede);
         String correctionText = currentTaskCorrection ? "correção de " : "";
         sendGui("LOG:" + npcName + " começou " + correctionText + taskSkill.getDisplayName()
             + " (" + skills.getRank(taskSkill) + " lv" + skLv + ", urgência " + currentTaskUrgency + ")");
@@ -309,6 +331,17 @@ public class WorkerAgent extends Agent {
         System.out.println(npcName + ": " + taskSkill.getDisplayName()
             + " (lv" + skills.getLevel(taskSkill) + ")");
 
+        // Consumo de material e lógica de pesca
+        if (t.contains("fish")) {
+            if (!Main.resources.consume("vara de pesca", 1)) {
+                sendGui("LOG:" + npcName + " tentou pescar mas não tem vara de pesca no armazém!");
+                sendReject(taskId);
+                return;
+            } else {
+                sendGui("UPDATE_RESOURCES");
+            }
+        }
+
         // Execute task
         if (isRaw && map.inBounds(actionX, actionY)) {
             TerrainTile tile = map.getTile(actionX, actionY);
@@ -361,6 +394,31 @@ public class WorkerAgent extends Agent {
                 + " para nível " + newLv + " (" + skills.getRank(taskSkill) + ")!");
         }
 
+        // Gera recursos (ex: pesca, lenha, pedra) e gasta (ex: constrói)
+        if (t.contains("fish") || t.contains("farm") || t.contains("harvest") || t.contains("plant")) {
+            Main.resources.add("comida", 1 + rand.nextInt(2));
+            sendGui("UPDATE_RESOURCES");
+        } else if (t.contains("wood") || t.contains("chop")) {
+            Main.resources.add("madeira", 1 + rand.nextInt(2));
+            sendGui("UPDATE_RESOURCES");
+        } else if (t.contains("mine") || t.contains("dig")) {
+            Main.resources.add("pedra", 1 + rand.nextInt(2));
+            if (rand.nextInt(8) == 0) Main.resources.add("ferro", 1);
+            sendGui("UPDATE_RESOURCES");
+        } else if (t.contains("build") || t.contains("construct")) {
+            if (Main.resources.consume("madeira", 2)) {
+                sendGui("UPDATE_RESOURCES");
+            } else {
+                sendGui("LOG: ⚠️ " + npcName + " construiu sem material (simulado)");
+            }
+        } else if (t.contains("craft") || t.contains("carpenter")) {
+             // Cria uma vara de pesca as vezes
+             if (rand.nextInt(5) == 0 && Main.resources.consume("madeira", 1)) {
+                 Main.resources.add("vara de pesca", 1);
+                 sendGui("UPDATE_RESOURCES");
+             }
+        }
+
         int progress = 100;
         if (taskTargetX >= 0 && taskTargetY >= 0) {
             ColonyBuilding target = map.getBuildingAt(taskTargetX, taskTargetY);
@@ -382,7 +440,7 @@ public class WorkerAgent extends Agent {
         currentTaskId = null;
         currentTaskCorrection = false;
         sendGui("WORKER_STATUS:" + npcName + ":" + taskSkill.getKey()
-            + ":" + newLv + ":" + skills.getRank(taskSkill) + ":ocioso:" + energy);
+            + ":" + newLv + ":" + skills.getRank(taskSkill) + ":ocioso:" + energy + ":" + fome + ":" + sede);
     }
 
     private void autoAct() {
@@ -415,7 +473,85 @@ public class WorkerAgent extends Agent {
             return;
         }
 
-        // Anda pelo mapa (só se tiver energia)
+        // Bebe água se estiver com sede
+        if (sede <= 40) {
+            ColonyBuilding stockpile = map.findNearestUnowned(BuildingType.STOCKPILE, npcX, npcY);
+            if (stockpile != null) moveTowards(stockpile.getX() + stockpile.getType().getWidth() / 2, stockpile.getY() + stockpile.getType().getHeight() / 2);
+            
+            if (Main.resources.consume("agua", 1)) {
+                sede = 100;
+                sendGui("LOG: 💧 " + npcName + " bebeu água no armazém.");
+                sendGui("UPDATE_RESOURCES");
+            } else {
+                sendGui("LOG: ⚠️ " + npcName + " está morrendo de sede e não há água!");
+                health -= 5;
+            }
+            sleep(1000);
+            return;
+        }
+
+        // Come se estiver com fome
+        if (fome <= 40) {
+            ColonyBuilding stockpile = map.findNearestUnowned(BuildingType.STOCKPILE, npcX, npcY);
+            if (stockpile != null) moveTowards(stockpile.getX() + stockpile.getType().getWidth() / 2, stockpile.getY() + stockpile.getType().getHeight() / 2);
+            
+            if (Main.resources.consume("comida", 1)) {
+                fome = 100;
+                sendGui("LOG: 🍗 " + npcName + " comeu no armazém.");
+                sendGui("UPDATE_RESOURCES");
+            } else {
+                sendGui("LOG: ⚠️ " + npcName + " está faminto e não há comida!");
+                health -= 5;
+            }
+            sleep(1000);
+            return;
+        }
+
+        // Combate e Caça
+        for (com.colony.model.Animal a : map.getAnimals()) {
+            if (Math.abs(a.x - npcX) <= 2 && Math.abs(a.y - npcY) <= 2) {
+                boolean isHunter = primarySkill == SkillType.WOOD_CUTTER || workerType.toLowerCase().contains("fighter") || workerType.toLowerCase().contains("hunter"); 
+                
+                if (a.dead) {
+                    // Esfolar
+                    int meat = isHunter ? 10 : 1;
+                    Main.resources.add("comida", meat);
+                    sendGui("LOG: 🥩 " + npcName + " esfolou a " + a.type + " e pegou " + meat + " de carne!");
+                    map.removeAnimal(a);
+                    sendGui("UPDATE_RESOURCES");
+                    sleep(1000);
+                    return;
+                }
+                
+                if (a.aggressive) {
+                    sendGui("LOG: ⚔️ " + npcName + " está sendo atacado por um " + a.type + "!");
+                    int dmg = isHunter ? 5 : 15;
+                    health -= dmg;
+                    a.hp -= isHunter ? 30 : 10;
+                    if (a.hp <= 0) {
+                        a.dead = true;
+                        a.rotTimer = 30;
+                        sendGui("LOG: ☠️ " + npcName + " matou o " + a.type + "!");
+                        a.type = "Carcaça de " + a.type;
+                    }
+                    sleep(1000);
+                    return;
+                } else if (isHunter || fome <= 30) {
+                    sendGui("LOG: 🏹 " + npcName + " está caçando um " + a.type + "...");
+                    a.hp -= 20;
+                    if (a.hp <= 0) {
+                        a.dead = true;
+                        a.rotTimer = 30;
+                        sendGui("LOG: ☠️ " + npcName + " abateu o " + a.type + "!");
+                        a.type = "Carcaça de " + a.type;
+                    }
+                    sleep(1000);
+                    return;
+                }
+            }
+        }
+
+        // Anda pelo mapa (só se tiver energia e não estiver morrendo)
         if (energy > 40 && rand.nextInt(4) == 0) {
             int dx = rand.nextInt(11) - 5;
             int dy = rand.nextInt(11) - 5;
@@ -549,7 +685,7 @@ public class WorkerAgent extends Agent {
             String status = (currentTaskId != null) ? "ocupado" : "ocioso";
             sendGui("WORKER_STATUS:" + npcName + ":" + primarySkill.getKey()
                 + ":" + skills.getLevel(primarySkill) + ":" + skills.getRank(primarySkill)
-                + ":" + status + ":" + energy);
+                + ":" + status + ":" + energy + ":" + fome + ":" + sede);
         } catch (Exception ignored) {}
     }
 

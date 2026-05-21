@@ -26,10 +26,12 @@ public class GuiAgent extends Agent {
                     String sender = msg.getSender().getLocalName();
 
                     if (content.startsWith("WORKER_STATUS:")) {
-                        String[] p = content.substring("WORKER_STATUS:".length()).split(":", 7);
+                        String[] p = content.substring("WORKER_STATUS:".length()).split(":", 9);
                         if (p.length >= 5) {
                             String energia = p.length >= 6 ? p[5] : "100";
-                            gui.updateWorker(p[0], p[1], p[2], p[3], p[4], energia);
+                            String fome = p.length >= 7 ? p[6] : "100";
+                            String sede = p.length >= 8 ? p[7] : "100";
+                            gui.updateWorker(p[0], p[1], p[2], p[3], p[4], energia, fome, sede);
                         }
                     }
                     else if (content.startsWith("WORKER_DETAILS:")) {
@@ -81,6 +83,9 @@ public class GuiAgent extends Agent {
                     else if (content.startsWith("WORKER_ANALYSIS:")) {
                         gui.addLog("[Analista] " + content.substring("WORKER_ANALYSIS:".length()));
                     }
+                    else if (content.startsWith("UPDATE_RESOURCES")) {
+                        gui.updateResources(com.colony.Main.resources);
+                    }
                     else if (content.startsWith("TERRAIN_ANALYSIS:")) {
                         String terrain = content.substring("TERRAIN_ANALYSIS:".length());
                         gui.addLog("[Terreno] " + terrain);
@@ -97,7 +102,7 @@ public class GuiAgent extends Agent {
 
     private void decodeTerrainAndUpdate(String terrain) {
         // Based on terrain analysis, add resources
-        ColonyResources res = new ColonyResources();
+        ColonyResources res = com.colony.Main.resources;
         if (terrain.contains("mountain")) {
             res.add("pedra", 30);
             res.add("ferro", 15);

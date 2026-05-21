@@ -6,7 +6,7 @@ Este documento detalha o funcionamento, as regras e a arquitetura do ecossistema
 
 A colônia é gerenciada por uma arquitetura multiagente (utilizando o framework JADE) dividida em três papéis principais:
 *   **WorkerAgent (Trabalhador / NPC):** A unidade física da colônia. Executa as ordens, movimenta-se pelo mapa, gasta energia e ganha experiência.
-*   **ManagerAgent (Gerente):** O cérebro logístico. Recebe as necessidades da colônia, cria uma fila de tarefas (Tasks), calcula urgências e prazos, e distribui as missões para o melhor trabalhador disponível.
+*   **ManagerAgent (Gerente):** O cérebro logístico. Recebe as necessidades da colônia, cria uma fila de tarefas (Tasks), calcula urgências e prazos, e distribui as missões para o melhor trabalhador disponível. (Se for muito necessário, o gerente tem a habilidade de instanciar e invocar novos trabalhadores para a colônia, mas vale lembrar que cada novo colono é uma nova boca para alimentar).
 *   **AnalystAgent (Analista):** O auditor e planejador urbano. Analisa o terreno, decide onde construir, verifica se os trabalhadores precisam de casas/oficinas, e audita rigorosamente o trabalho concluído.
 
 ### Interface do Usuário (GUI)
@@ -14,6 +14,7 @@ A colônia é gerenciada por uma arquitetura multiagente (utilizando o framework
     *   **Em Espera:** Tarefas pendentes ou na fila aguardando ação.
     *   **Sendo Feitas:** Tarefas em execução ativa por um colono.
     *   **Concluídas:** Tarefas auditadas e terminadas com sucesso.
+*   **Aba Trabalhadores:** Exibe em tempo real o Nível, Profissão, Energia, Fome, e Sede de cada NPC.
 *   **Rodapé (Footer):** Exibe informações em tempo real calculadas a partir das tarefas em andamento, incluindo contagem total consolidada.
 
 ---
@@ -38,18 +39,40 @@ A colônia é gerenciada por uma arquitetura multiagente (utilizando o framework
 
 ---
 
-## 3. Regras dos Trabalhadores (Workers)
+## 3. Regras dos Trabalhadores (Workers) e Sobrevivência
 
-### Atributos de Sobrevivência e Descanso
-*   **Energia (Energy):** Varia de 0 a 100.
-    *   Cada ação de trabalho gasta energia.
-    *   Se a energia cair para `<= 30`, o trabalhador entra em modo de preservação e procura descansar.
-    *   **Descanso Obrigatório em Casa:** Para ter um descanso eficiente, o NPC **deve caminhar fisicamente para dentro de sua casa**. Se não conseguir chegar ou não tiver casa, ele dorme no relento recuperando muito menos energia e gastando mais tempo.
-*   **Saúde (Health):** Varia de 0 a 100. Morte iminente (<= 10) força a busca por tratamento médico.
+### Fome, Sede e Morte Permanente
+*   **Fome e Sede:** Ambas variam de 0 a 100.
+    *   Elas caem lentamente com o tempo (a cada ciclo).
+    *   Se alguma delas chegar a `<= 40`, o colono para de trabalhar, entra em modo de urgência e caminha até o armazém para comer/beber, consumindo os itens globais do painel de recursos.
+    *   **Morte Real:** Se a Fome ou a Sede chegarem a `0`, o agente literalmente "morre" (é ejetado do JADE usando `doDelete()`) e para de existir na simulação.
 
-### Logística de Oficinas e Materiais
-*   **Trabalho Interno:** Um colono com profissão específica (ex: Ferreiro, Carpinteiro) **obrigatoriamente** deve se deslocar para dentro do perímetro de sua **Oficina** para executar a ação de craft.
-*   **Busca de Materiais:** O material não aparece magicamente na mão do colono. Antes de iniciar um trabalho na oficina, o trabalhador precisará andar até um **Armazém (Stockpile)** para buscar os recursos necessários. Se não houver armazém, a tarefa falha ou atrasa.
+### Vida (HP), Dano e Ferimentos
+*   **Saúde (Health):** Varia de 0 a 100.
+    *   Se tomar dano de animais, o HP diminui.
+    *   **Punição por Ferimentos:** Se o HP estiver baixo (`< 100`), a Fome e a Sede **caem duas vezes mais rápido**, pois o corpo precisa de energia para se recuperar. Além disso, se o dano for grande o suficiente, ele pode rejeitar tarefas para focar em repouso.
+    *   O HP se regenera bem devagar com o passar do tempo (+2 de vida por ciclo, contanto que não esteja tomando dano nem morrendo de fome).
+    *   Se o HP chegar a `0`, o anão morre e também é removido do mapa.
+
+### Descanso e Energia
+*   **Energia (Energy):** Varia de 0 a 100. Gasta a cada ação e locomoção.
+*   **Descanso Obrigatório em Casa:** Para ter um descanso eficiente, o NPC **deve caminhar fisicamente para dentro de sua casa** (atravessando a porta). Se não conseguir chegar ou não tiver casa, ele dorme no relento recuperando muito menos energia e gastando mais tempo.
+
+### Vida Selvagem e Caça 🐺🦌
+*   Animais agressivos (Lobos) e passivos (Cervos) dão respawn de tempos em tempos no mapa de forma autônoma.
+*   **O Combate:** 
+    *   Se um lobo agressivo estiver perto, ele ataca o anão, causando grande dano (15 de dano) por turno. 
+    *   Se o NPC for um **Caçador / Guerreiro / Lenhador**, ele sabe lutar: Toma apenas 5 de dano do lobo e desfere golpes críticos contra os animais.
+    *   Caçadores buscarão caçar passivamente os animais se chegarem perto deles.
+*   **Carcaça e Esfolamento:**
+    *   Quando um animal tem o HP zerado, ele **não dropa a carne imediatamente**. Em vez disso, ele vira uma **Carcaça** no chão.
+    *   A carcaça tem um "prazo de validade" (tempo de decomposição). Se esse timer expirar antes de alguém chegar nela, ela apodrece e some do mapa.
+    *   **Loot:** Se um NPC passa por cima da carcaça para esfolar, ela é coletada. **Regra Importante:** Se o NPC for um *Caçador*, ele coleta as carnes perfeitamente ganhando `10 de Comida`. Se for um civil (ferreiro, pedreiro), ele não sabe esfolar e resgata apenas `1 de Comida`.
+
+### Logística de Oficinas, Pesca e Materiais
+*   **Trabalho Interno:** Um colono com profissão específica **obrigatoriamente** deve se deslocar para dentro do perímetro de sua **Oficina** para executar a ação de craft.
+*   **Busca de Materiais:** O material não aparece magicamente. O trabalhador precisa andar até o **Armazém (Stockpile)** para buscar recursos antes de trabalhar.
+*   **Pesca:** A profissão de pescador difere das demais por não usar uma oficina física, bastando caminhar até a beira de um Rio (água). Contudo, a tarefa de pesca só acontece se houver uma **"vara de pesca"** em estoque, fabricada passivamente por Carpinteiros.
 
 ### Profissões e Sistema de Experiência (Skills)
 *   Trabalhar gera XP. Subir de Nível (Level) faz o colono trabalhar mais rápido e com mais qualidade, ganhando prioridade com o Gerente.

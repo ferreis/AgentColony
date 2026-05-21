@@ -11,6 +11,7 @@ public class ColonyMap {
     private final Map<String, int[]> npcPositions;
     private final Map<String, ColonyBuilding> npcHomes;
     private final Map<String, String> zoneNames;
+    private final List<Animal> animals = new CopyOnWriteArrayList<>();
 
     public ColonyMap() {
         this.tiles = new TerrainTile[HEIGHT][WIDTH];
@@ -21,6 +22,10 @@ public class ColonyMap {
         generateTerrain();
         placeStartingZone();
     }
+
+    public List<Animal> getAnimals() { return animals; }
+    public void addAnimal(Animal a) { animals.add(a); }
+    public void removeAnimal(Animal a) { animals.remove(a); }
 
     private void generateTerrain() {
         for (int y = 0; y < HEIGHT; y++) {
