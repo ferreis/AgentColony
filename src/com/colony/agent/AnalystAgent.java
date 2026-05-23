@@ -14,6 +14,8 @@ public class AnalystAgent extends Agent {
   private final Map<String, String> workerSkills = new HashMap<>();
   private final Map<String, Integer> workerCountBySkill = new HashMap<>();
   private final Map<String, WorkerStatus> workerStatuses = new HashMap<>();
+  private static final int FOOD_THRESHOLD = 30;
+  private static final int WATER_THRESHOLD = 20;
 
   static class WorkerStatus {
     String name;
@@ -74,6 +76,11 @@ public class AnalystAgent extends Agent {
             }
           } else if (content.startsWith("TASK_QUEUE_REPORT:")) {
             analyzeTaskQueue(content.substring("TASK_QUEUE_REPORT:".length()));
+          } else if ("REQUEST_RESOURCE_ABUNDANCE".equals(content)) {
+            boolean abundant = isResourceAbundant();
+            ACLMessage reply = msg.createReply();
+            reply.setContent("RESOURCE_ABUNDANCE_RESULT:" + abundant);
+            send(reply);
           }
         } else {
           block();
@@ -96,6 +103,12 @@ public class AnalystAgent extends Agent {
         }
       }
     });
+  }
+
+  private boolean isResourceAbundant() {
+    int food = Main.resources.get("comida");
+    int water = Main.resources.get("agua");
+    return food > FOOD_THRESHOLD && water > WATER_THRESHOLD;
   }
 
   private String analyzeColonyNeeds() {

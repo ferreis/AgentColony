@@ -5,6 +5,9 @@ import jade.core.behaviours.CyclicBehaviour;
 import jade.core.behaviours.TickerBehaviour;
 import jade.lang.acl.ACLMessage;
 import jade.core.AID;
+import jade.wrapper.AgentContainer;
+import jade.wrapper.AgentController;
+import jade.wrapper.StaleProxyException;
 import com.colony.model.*;
 import com.colony.model.ColonyMap.ColonyBuilding;
 import com.colony.Main;
@@ -23,6 +26,9 @@ public class ManagerAgent extends Agent {
   private static final long DEFAULT_DEADLINE_MS = 18000;
   private static final long BUILD_DEADLINE_MS = 26000;
   private static final int MAX_URGENCY = 5;
+  private static final int FOOD_THRESHOLD = 30;
+  private static final int WATER_THRESHOLD = 20;
+  private static final String DEFAULT_NEW_WORKER_TYPE = "builder";
 
   static class WorkerInfo {
     String name;
@@ -85,6 +91,12 @@ public class ManagerAgent extends Agent {
     addBehaviour(new TickerBehaviour(this, 5000) {
       protected void onTick() {
         sendTaskQueueToAnalyst();
+      }
+    });
+
+    addBehaviour(new TickerBehaviour(this, 10000) {
+      protected void onTick() {
+        requestResourceAbundanceAnalysis();
       }
     });
 
@@ -158,8 +170,73 @@ public class ManagerAgent extends Agent {
       handleDeadlineReport(content.substring("DEADLINE_REPORT:".length()));
     } else if (content.startsWith("SCALE_ALERT:")) {
       sendToGui("LOG:Analista: " + content.substring("SCALE_ALERT:".length()));
+    } else if (content.startsWith("RESOURCE_ABUNDANCE_RESULT:")) {
+      handleResourceAbundanceResult(content.substring("RESOURCE_ABUNDANCE_RESULT:".length()));
     } else if ("REQUEST_WORKFORCE".equals(content)) {
       sendWorkforceTo(msg.getSender().getLocalName());
+    }
+  }
+
+  private void requestResourceAbundanceAnalysis() {
+    ACLMessage msg = new ACLMessage(ACLMessage.REQUEST);
+    msg.addReceiver(new AID("analyst", AID.ISLOCALNAME));
+    msg.setContent("REQUEST_RESOURCE_ABUNDANCE");
+    send(msg);
+  }
+
+  private void handleResourceAbundanceResult(String payload) {
+    boolean abundant = Boolean.parseBoolean(payload.trim());
+    if (!abundant) {
+      return;
+    }
+
+    ColonyBuilding availableHouse = findUnassignedCompletedHouse();
+    if (availableHouse == null) {
+      sendToGui("LOG:Gerente: recursos abundantes, mas sem casa concluída disponível para novo trabalhador.");
+      return;
+    }
+
+    createWorkerWithAssignedHouse(availableHouse);
+  }
+
+  private ColonyBuilding findUnassignedCompletedHouse() {
+    return Main.colonyMap.findAvailableHouse();
+  }
+
+  private void createWorkerWithAssignedHouse(ColonyBuilding house) {
+    String workerName = nextWorkerName();
+    AgentContainer container = getContainerController();
+    if (container == null) {
+      sendToGui("LOG:Gerente: container JADE indisponível para criar trabalhador " + workerName + ".");
+      return;
+    }
+
+    try {
+      Main.colonyMap.assignHome(workerName, house);
+      AgentController worker = container.createNewAgent(
+          workerName,
+          WorkerAgent.class.getName(),
+          new Object[] { DEFAULT_NEW_WORKER_TYPE });
+      worker.start();
+
+      sendToGui("LOG:Gerente criou novo trabalhador " + workerName
+          + " com casa em (" + house.getX() + "," + house.getY() + ")"
+          + " após detectar abundância de comida/água (" + FOOD_THRESHOLD + "/" + WATER_THRESHOLD + ").");
+    } catch (StaleProxyException e) {
+      house.setOwner(null);
+      sendToGui("LOG:Gerente falhou ao criar trabalhador " + workerName + ": " + e.getMessage());
+    }
+  }
+
+  private String nextWorkerName() {
+    int idx = 1;
+    while (true) {
+      String candidate = "WorkerAuto" + idx;
+      boolean exists = workers.stream().anyMatch(w -> w.name.equals(candidate));
+      if (!exists) {
+        return candidate;
+      }
+      idx++;
     }
   }
 
