@@ -64,7 +64,6 @@ public class MapPanel extends JPanel {
 
       public void mouseWheelMoved(MouseWheelEvent e) {
         if (e.isControlDown()) {
-          double oldScale = scale;
           scale = Math.max(4, Math.min(32, scale - e.getWheelRotation() * 2));
           setPreferredSize(new Dimension(
               (int) (ColonyMap.WIDTH * scale),

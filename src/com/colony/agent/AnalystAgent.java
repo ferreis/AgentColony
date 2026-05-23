@@ -13,7 +13,6 @@ import java.util.*;
 public class AnalystAgent extends Agent {
   private final Map<String, String> workerSkills = new HashMap<>();
   private final Map<String, Integer> workerCountBySkill = new HashMap<>();
-  private final Map<String, StringBuilder> taskEvaluations = new HashMap<>();
   private final Map<String, WorkerStatus> workerStatuses = new HashMap<>();
 
   static class WorkerStatus {
@@ -34,7 +33,6 @@ public class AnalystAgent extends Agent {
         ACLMessage msg = receive();
         if (msg != null) {
           String content = msg.getContent();
-          String sender = msg.getSender().getLocalName();
 
           if (content.startsWith("VERIFY_TASK:")) {
             String payload = content.substring("VERIFY_TASK:".length());

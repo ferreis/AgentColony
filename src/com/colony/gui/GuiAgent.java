@@ -22,7 +22,6 @@ public class GuiAgent extends Agent {
         ACLMessage msg = receive();
         if (msg != null && gui != null) {
           String content = msg.getContent();
-          String sender = msg.getSender().getLocalName();
 
           if (content.startsWith("WORKER_STATUS:")) {
             String[] p = content.substring("WORKER_STATUS:".length()).split(":", 9);

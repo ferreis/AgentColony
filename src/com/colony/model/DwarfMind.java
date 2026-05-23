@@ -11,7 +11,6 @@ public class DwarfMind {
 
     int health = state.getStats().health;
     int energy = state.getStats().energy;
-    String mood = state.getStats().mood;
     List<String> needs = state.getUrgentNeeds();
     List<String> priorities = state.getFortressPriorities();
 

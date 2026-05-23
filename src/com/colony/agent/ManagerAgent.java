@@ -420,7 +420,6 @@ public class ManagerAgent extends Agent {
           try {
             int bx = Integer.parseInt(coord[0]);
             int by = Integer.parseInt(coord[1]);
-            BuildingType bt = BuildingType.valueOf(coord[2]);
             ColonyBuilding b = map.getBuildingAt(bx, by);
             if (b != null && b.getProgress() < 100 && !hasTaskFor(b)) {
               createBuildTask(b);
@@ -447,25 +446,6 @@ public class ManagerAgent extends Agent {
     }
   }
 
-  private BuildingType workshopForSkill(String skill) {
-    String s = skill.toLowerCase();
-    if (s.contains("carpenter") || s.contains("bowyer") || s.contains("wood craft"))
-      return BuildingType.CARPENTER;
-    if (s.contains("mason") || s.contains("stone") || s.contains("engrave"))
-      return BuildingType.MASON;
-    if (s.contains("smith") || s.contains("forge") || s.contains("furnace"))
-      return BuildingType.SMITH;
-    if (s.contains("craft") || s.contains("potter") || s.contains("bone") || s.contains("weaver"))
-      return BuildingType.CRAFTER;
-    if (s.contains("cook") || s.contains("brew") || s.contains("butcher"))
-      return BuildingType.KITCHEN;
-    if (s.contains("diagnos") || s.contains("surgeon") || s.contains("bone doctor"))
-      return BuildingType.HOSPITAL;
-    if (s.contains("farm") || s.contains("plant"))
-      return BuildingType.FARM;
-    return null;
-  }
-
   private boolean hasWorkshop(BuildingType type) {
     return Main.colonyMap.getBuildings().stream()
         .anyMatch(b -> b.getType() == type);
@@ -477,11 +457,6 @@ public class ManagerAgent extends Agent {
 
   private boolean hasIncompleteBuildFor(BuildingType bt) {
     return tasks.stream().anyMatch(t -> !"approved".equals(t.status) && t.target != null && t.target.getType() == bt);
-  }
-
-  private boolean hasExistingBuilding(BuildingType bt, int minProgress) {
-    return Main.colonyMap.getBuildings().stream()
-        .anyMatch(b -> b.getType() == bt && b.getProgress() >= minProgress);
   }
 
   private long getPendingTaskCount(String type) {
