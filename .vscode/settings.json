@@ -1,5 +1,5 @@
 {
-    "java.project.sourcePaths": ["src"],
-    "java.project.referencedLibraries": ["jade.jar"],
-    "java.project.outputPath": "bin"
+  "java.project.sourcePaths": ["src"],
+  "java.project.referencedLibraries": ["jade.jar"],
+  "java.project.outputPath": "bin"
 }
