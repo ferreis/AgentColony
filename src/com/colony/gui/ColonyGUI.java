@@ -6,6 +6,7 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.util.*;
+import java.util.function.IntConsumer;
 
 public class ColonyGUI {
   private final JFrame frame;
@@ -16,12 +17,13 @@ public class ColonyGUI {
   private final JTextArea resourceArea;
   private final JLabel statusLabel;
   private final JLabel statsLabel;
+  private final JLabel speedLabel;
   private final MapPanel mapPanel;
   private final Map<String, String> workerDetails;
   private final JTable workerTable;
   private int totalTasks = 0;
 
-  public ColonyGUI(ColonyMap colonyMap, ColonyResources colonyResources) {
+  public ColonyGUI(ColonyMap colonyMap, ColonyResources colonyResources, IntConsumer speedChangeListener) {
     workerDetails = new HashMap<>();
 
     frame = new JFrame("Gerenciador de Colônia - Inspirado em Dwarf Fortress");
@@ -40,11 +42,44 @@ public class ColonyGUI {
     statusLabel.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
     topBar.add(statusLabel, BorderLayout.WEST);
 
-    JLabel versionLabel = new JLabel("v0.1.1");
+    JLabel versionLabel = new JLabel("v0.2.0");
     versionLabel.setForeground(new Color(150, 180, 220));
     versionLabel.setFont(new Font("Monospaced", Font.BOLD, 12));
     versionLabel.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 14));
-    topBar.add(versionLabel, BorderLayout.EAST);
+
+    JPanel topRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 4));
+    topRight.setOpaque(false);
+
+    speedLabel = new JLabel("Velocidade: " + SimulationSpeed.getLabel());
+    speedLabel.setForeground(new Color(190, 220, 255));
+    speedLabel.setFont(new Font("Monospaced", Font.BOLD, 12));
+
+    JComboBox<String> speedSelector = new JComboBox<>(new String[] { "1x", "2x", "5x", "10x" });
+    speedSelector.setSelectedItem(SimulationSpeed.getLabel());
+    speedSelector.setFocusable(false);
+    speedSelector.addActionListener(e -> {
+      Object selected = speedSelector.getSelectedItem();
+      if (selected == null) {
+        return;
+      }
+
+      String label = selected.toString().trim().toLowerCase(Locale.ROOT);
+      int multiplier = switch (label) {
+        case "2x" -> SimulationSpeed.SPEED_2X;
+        case "5x" -> SimulationSpeed.SPEED_5X;
+        case "10x" -> SimulationSpeed.SPEED_10X;
+        default -> SimulationSpeed.SPEED_1X;
+      };
+
+      speedChangeListener.accept(multiplier);
+      updateSpeedLabel();
+      addLog("Velocidade alterada para " + SimulationSpeed.getLabel() + ".");
+    });
+
+    topRight.add(speedLabel);
+    topRight.add(speedSelector);
+    topRight.add(versionLabel);
+    topBar.add(topRight, BorderLayout.EAST);
 
     frame.add(topBar, BorderLayout.NORTH);
 
@@ -137,7 +172,7 @@ public class ColonyGUI {
     JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 3));
     bottom.setBackground(new Color(50, 50, 60));
     statsLabel = new JLabel(" Trabalhadores: 0  |  Tarefas: 0  |  Mapa: "
-        + ColonyMap.WIDTH + "x" + ColonyMap.HEIGHT + " | v0.1.1");
+        + ColonyMap.WIDTH + "x" + ColonyMap.HEIGHT + " | v0.2.0");
     statsLabel.setForeground(Color.LIGHT_GRAY);
     statsLabel.setFont(new Font("Monospaced", Font.PLAIN, 11));
     bottom.add(statsLabel);
@@ -156,10 +191,14 @@ public class ColonyGUI {
     return mapPanel;
   }
 
+  public void updateSpeedLabel() {
+    SwingUtilities.invokeLater(() -> speedLabel.setText("Velocidade: " + SimulationSpeed.getLabel()));
+  }
+
   private void updateStats() {
     int w = workerModel.getRowCount();
     statsLabel.setText(" Trabalhadores: " + w + "  |  Tarefas (Total): " + totalTasks + "  |  Mapa: "
-        + ColonyMap.WIDTH + "x" + ColonyMap.HEIGHT + " | v0.1.1");
+        + ColonyMap.WIDTH + "x" + ColonyMap.HEIGHT + " | v0.2.0");
     statusLabel.setText(" Trabalhadores Ativos: " + w + "  |  Tarefas Abertas: " + taskActiveModel.getRowCount());
   }
 

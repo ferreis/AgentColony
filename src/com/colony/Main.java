@@ -7,12 +7,16 @@ import jade.wrapper.AgentContainer;
 import jade.wrapper.AgentController;
 import jade.wrapper.StaleProxyException;
 import com.colony.model.ColonyMap;
+import com.colony.model.SimulationSpeed;
 
 public class Main {
 	public static final ColonyMap colonyMap = new ColonyMap();
 	public static final com.colony.model.ColonyResources resources = new com.colony.model.ColonyResources();
 
 	public static void main(String[] args) {
+		SimulationSpeed.initializeFromSystemProperty();
+		System.out.println("Velocidade da simulação: " + SimulationSpeed.getLabel());
+
 		// Initialize the JADE runtime and container
 		Runtime rt = Runtime.instance();
 		rt.setCloseVM(true); // Terminate JVM when no more agents

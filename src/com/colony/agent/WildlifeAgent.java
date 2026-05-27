@@ -3,15 +3,19 @@ package com.colony.agent;
 import com.colony.Main;
 import com.colony.model.Animal;
 import com.colony.model.ColonyMap;
-import jade.core.behaviours.TickerBehaviour;
+import com.colony.model.SimulationSpeed;
+import jade.core.behaviours.CyclicBehaviour;
 import jade.lang.acl.ACLMessage;
 import jade.core.AID;
 import java.util.Random;
 
 public class WildlifeAgent extends ColonyAgentBase {
   private static final int MAX_WILD_ANIMALS = 5;
+  private static final long WILDLIFE_TICK_INTERVAL_MS = 3000;
+  private static final long WILDLIFE_LOOP_BLOCK_MS = 250;
   private final Random random = new Random();
   private ColonyMap colonyMap;
+  private long nextWildlifeTickAt = 0L;
 
   @Override
   protected void setup() {
@@ -25,9 +29,17 @@ public class WildlifeAgent extends ColonyAgentBase {
 
     System.out.println(getLocalName() + ": Agente de vida selvagem iniciado.");
 
-    addBehaviour(new TickerBehaviour(this, 3000) {
+    nextWildlifeTickAt = System.currentTimeMillis();
+    addBehaviour(new CyclicBehaviour() {
       @Override
-      protected void onTick() {
+      public void action() {
+        long now = System.currentTimeMillis();
+        if (now < nextWildlifeTickAt) {
+          block(SimulationSpeed.scaleDelay(WILDLIFE_LOOP_BLOCK_MS));
+          return;
+        }
+
+        nextWildlifeTickAt = now + SimulationSpeed.scaleDelay(WILDLIFE_TICK_INTERVAL_MS);
         ColonyMap map = colonyMap;
 
         if (map.getAnimals().size() < MAX_WILD_ANIMALS && random.nextInt(3) == 0) {

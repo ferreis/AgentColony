@@ -6,6 +6,7 @@ import com.colony.agent.ColonyAgentBase;
 import com.colony.Main;
 import com.colony.model.ColonyMap;
 import com.colony.model.ColonyResources;
+import com.colony.model.SimulationSpeed;
 import javax.swing.*;
 
 public class GuiAgent extends ColonyAgentBase {
@@ -29,7 +30,10 @@ public class GuiAgent extends ColonyAgentBase {
     System.out.println(getLocalName() + ": Agente GUI iniciando...");
 
     SwingUtilities.invokeLater(() -> {
-      gui = new ColonyGUI(colonyMap, resources);
+      gui = new ColonyGUI(colonyMap, resources, multiplier -> {
+        SimulationSpeed.setMultiplier(multiplier);
+      });
+      gui.updateSpeedLabel();
       gui.addLog("GUI inicializada. Aguardando agentes...");
     });
 

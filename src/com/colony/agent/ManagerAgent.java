@@ -1,7 +1,6 @@
 package com.colony.agent;
 
 import jade.core.behaviours.CyclicBehaviour;
-import jade.core.behaviours.TickerBehaviour;
 import jade.lang.acl.ACLMessage;
 import jade.core.AID;
 import jade.wrapper.AgentContainer;
@@ -38,6 +37,12 @@ public class ManagerAgent extends ColonyAgentBase {
   private final Random random = new Random();
   private int taskCounter = 0;
   private long lastWorkerCreationAt = 0L;
+  private long nextDistributeTasksAt = 0L;
+  private long nextTaskQueueReportAt = 0L;
+  private long nextResourceAnalysisAt = 0L;
+  private long nextEnsureWorkerAt = 0L;
+  private long nextStockCheckAt = 0L;
+  private long nextRawMaterialFallbackAt = 0L;
 
   // Task types that don't need a building
   private static final Set<String> RAW_TASK_TYPES = Set.of("mine", "woodcut", "fish", "harvest", "gather");
@@ -46,6 +51,13 @@ public class ManagerAgent extends ColonyAgentBase {
   private static final int MAX_URGENCY = 5;
   private static final int FOOD_THRESHOLD = 30;
   private static final int WATER_THRESHOLD = 20;
+  private static final long DISTRIBUTE_TASKS_INTERVAL_MS = 4000;
+  private static final long TASK_QUEUE_REPORT_INTERVAL_MS = 5000;
+  private static final long RESOURCE_ANALYSIS_INTERVAL_MS = 10000;
+  private static final long ENSURE_WORKER_INTERVAL_MS = 7000;
+  private static final long STOCK_CHECK_INTERVAL_MS = 6000;
+  private static final long RAW_MATERIAL_FALLBACK_INTERVAL_MS = 15000;
+  private static final long SCHEDULER_BLOCK_BASE_MS = 250;
 
     private static final Map<String, Integer> MIN_STOCK_BALANCEADO = Map.of(
       "madeira", 180,
@@ -175,49 +187,69 @@ public class ManagerAgent extends ColonyAgentBase {
       }
     });
 
-    addBehaviour(new TickerBehaviour(this, 4000) {
-      protected void onTick() {
-        distributeTasks();
-      }
-    });
+    initDynamicSchedule();
+    addDynamicSchedulerBehaviour();
+  }
 
-    addBehaviour(new TickerBehaviour(this, 5000) {
-      protected void onTick() {
-        sendTaskQueueToAnalyst();
-      }
-    });
+  private void initDynamicSchedule() {
+    long now = System.currentTimeMillis();
+    nextDistributeTasksAt = now;
+    nextTaskQueueReportAt = now;
+    nextResourceAnalysisAt = now;
+    nextEnsureWorkerAt = now;
+    nextStockCheckAt = now;
+    nextRawMaterialFallbackAt = now;
+  }
 
-    addBehaviour(new TickerBehaviour(this, 10000) {
-      protected void onTick() {
-        requestResourceAbundanceAnalysis();
-      }
-    });
+  private void addDynamicSchedulerBehaviour() {
+    addBehaviour(new CyclicBehaviour() {
+      @Override
+      public void action() {
+        long now = System.currentTimeMillis();
 
-    addBehaviour(new TickerBehaviour(this, 7000) {
-      protected void onTick() {
-        ensureWorkerForAvailableHouse();
-      }
-    });
-
-    addBehaviour(new TickerBehaviour(this, 6000) {
-      protected void onTick() {
-        ensureStockForWorkers();
-      }
-    });
-
-    // Análise é feita pelo Analista (COLONY_ANALYSIS) - este ticker é fallback
-    addBehaviour(new TickerBehaviour(this, 15000) {
-      protected void onTick() {
-        // fallback: só cria matérias-primas se precisar
-        long idleCount = workers.stream().filter(w -> !w.busy).count();
-        if (idleCount >= 2 && getPendingTaskCount("mine") == 0) {
-          createTask("mine", "mine");
+        if (now >= nextDistributeTasksAt) {
+          distributeTasks();
+          nextDistributeTasksAt = now + SimulationSpeed.scaleDelay(DISTRIBUTE_TASKS_INTERVAL_MS);
         }
-        if (idleCount >= 2 && getPendingTaskCount("woodcut") == 0) {
-          createTask("woodcut", "woodcut");
+
+        if (now >= nextTaskQueueReportAt) {
+          sendTaskQueueToAnalyst();
+          nextTaskQueueReportAt = now + SimulationSpeed.scaleDelay(TASK_QUEUE_REPORT_INTERVAL_MS);
         }
+
+        if (now >= nextResourceAnalysisAt) {
+          requestResourceAbundanceAnalysis();
+          nextResourceAnalysisAt = now + SimulationSpeed.scaleDelay(RESOURCE_ANALYSIS_INTERVAL_MS);
+        }
+
+        if (now >= nextEnsureWorkerAt) {
+          ensureWorkerForAvailableHouse();
+          nextEnsureWorkerAt = now + SimulationSpeed.scaleDelay(ENSURE_WORKER_INTERVAL_MS);
+        }
+
+        if (now >= nextStockCheckAt) {
+          ensureStockForWorkers();
+          nextStockCheckAt = now + SimulationSpeed.scaleDelay(STOCK_CHECK_INTERVAL_MS);
+        }
+
+        if (now >= nextRawMaterialFallbackAt) {
+          runRawMaterialFallback();
+          nextRawMaterialFallbackAt = now + SimulationSpeed.scaleDelay(RAW_MATERIAL_FALLBACK_INTERVAL_MS);
+        }
+
+        block(SimulationSpeed.scaleDelay(SCHEDULER_BLOCK_BASE_MS));
       }
     });
+  }
+
+  private void runRawMaterialFallback() {
+    long idleCount = workers.stream().filter(w -> !w.busy).count();
+    if (idleCount >= 2 && getPendingTaskCount("mine") == 0) {
+      createTask("mine", "mine");
+    }
+    if (idleCount >= 2 && getPendingTaskCount("woodcut") == 0) {
+      createTask("woodcut", "woodcut");
+    }
   }
 
   private void handleMessage(ACLMessage msg) {

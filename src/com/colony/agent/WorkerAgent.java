@@ -2,7 +2,6 @@ package com.colony.agent;
 
 import jade.core.behaviours.CyclicBehaviour;
 import jade.core.behaviours.OneShotBehaviour;
-import jade.core.behaviours.TickerBehaviour;
 import jade.lang.acl.ACLMessage;
 import jade.core.AID;
 import com.colony.model.*;
@@ -40,8 +39,13 @@ public class WorkerAgent extends ColonyAgentBase {
   private boolean currentTaskCorrection = false;
   private boolean restingUntilFull = false;
   private int hungerDecayAccumulator = 0;
+  private long nextStatusReportAt = 0L;
 
   private static final int THIRST_DECAY_PER_TICK = 2;
+  private static final long INFO_REPORT_INTERVAL_MS = 5000;
+  private static final long MESSAGE_LOOP_BLOCK_MS = 300;
+  private static final long AUTO_ACT_LOOP_BLOCK_MS = 3000;
+  private static final long STATUS_LOOP_BLOCK_MS = 250;
 
   // Tipos de trabalho que NÃO precisam de construção
   private static final Set<String> RAW_TASKS = Set.of(
@@ -131,7 +135,7 @@ public class WorkerAgent extends ColonyAgentBase {
             acceptTask(taskId, taskType);
           }
         } else {
-          block(300);
+          block(SimulationSpeed.scaleDelay(MESSAGE_LOOP_BLOCK_MS));
         }
       }
     });
@@ -141,38 +145,48 @@ public class WorkerAgent extends ColonyAgentBase {
         if (regManager && currentTaskId == null) {
           autoAct();
         }
-        block(3000);
+        block(SimulationSpeed.scaleDelay(AUTO_ACT_LOOP_BLOCK_MS));
       }
     });
 
-    // Periodic info report to manager
-    addBehaviour(new TickerBehaviour(this, 5000) {
-      protected void onTick() {
-        if (health <= 0 || fome <= 0 || sede <= 0) {
-          sendGui("LOG: ☠️ " + npcName + " MORREU (Fome:" + fome + " Sede:" + sede + " HP:" + health + ")");
-          doDelete();
-          return;
+    nextStatusReportAt = System.currentTimeMillis();
+    addBehaviour(new CyclicBehaviour() {
+      @Override
+      public void action() {
+        long now = System.currentTimeMillis();
+        if (now >= nextStatusReportAt) {
+          performPeriodicStatusReport();
+          nextStatusReportAt = now + SimulationSpeed.scaleDelay(INFO_REPORT_INTERVAL_MS);
         }
-
-        sede = Math.max(0, sede - THIRST_DECAY_PER_TICK);
-
-        // Fome cai 2x mais devagar que sede (metade da taxa ao longo do tempo).
-        hungerDecayAccumulator += THIRST_DECAY_PER_TICK;
-        int hungerDrop = hungerDecayAccumulator / 2;
-        if (hungerDrop > 0) {
-          fome = Math.max(0, fome - hungerDrop);
-          hungerDecayAccumulator %= 2;
-        }
-
-        if (health < 100) {
-          health = Math.min(100, health + 2); // Regen lentamente
-        }
-
-        if (regManager) {
-          sendInfoToManager();
-        }
+        block(SimulationSpeed.scaleDelay(STATUS_LOOP_BLOCK_MS));
       }
     });
+  }
+
+  private void performPeriodicStatusReport() {
+    if (health <= 0 || fome <= 0 || sede <= 0) {
+      sendGui("LOG: ☠️ " + npcName + " MORREU (Fome:" + fome + " Sede:" + sede + " HP:" + health + ")");
+      doDelete();
+      return;
+    }
+
+    sede = Math.max(0, sede - THIRST_DECAY_PER_TICK);
+
+    // Fome cai 2x mais devagar que sede (metade da taxa ao longo do tempo).
+    hungerDecayAccumulator += THIRST_DECAY_PER_TICK;
+    int hungerDrop = hungerDecayAccumulator / 2;
+    if (hungerDrop > 0) {
+      fome = Math.max(0, fome - hungerDrop);
+      hungerDecayAccumulator %= 2;
+    }
+
+    if (health < 100) {
+      health = Math.min(100, health + 2); // Regen lentamente
+    }
+
+    if (regManager) {
+      sendInfoToManager();
+    }
   }
 
   private void regComplete() {
@@ -842,7 +856,7 @@ public class WorkerAgent extends ColonyAgentBase {
   }
 
   private void sleep(int ms) {
-    doWait(Math.max(1, ms));
+    doWait(SimulationSpeed.scaleDelay(Math.max(1, ms)));
   }
 
   private int parseInt(String value, int fallback) {

@@ -1,7 +1,6 @@
 package com.colony.agent;
 
 import jade.core.behaviours.CyclicBehaviour;
-import jade.core.behaviours.TickerBehaviour;
 import jade.lang.acl.ACLMessage;
 import jade.core.AID;
 import com.colony.model.*;
@@ -17,8 +16,11 @@ public class AnalystAgent extends ColonyAgentBase {
   private final Map<String, String> workerSkills = new HashMap<>();
   private final Map<String, Integer> workerCountBySkill = new HashMap<>();
   private final Map<String, WorkerStatus> workerStatuses = new HashMap<>();
+  private long nextPeriodicAnalysisAt = 0L;
   private static final int FOOD_THRESHOLD = 30;
   private static final int WATER_THRESHOLD = 20;
+  private static final long PERIODIC_ANALYSIS_INTERVAL_MS = 8000;
+  private static final long ANALYSIS_LOOP_BLOCK_MS = 250;
 
   static class WorkerStatus {
     String name;
@@ -104,21 +106,32 @@ public class AnalystAgent extends ColonyAgentBase {
       }
     });
 
-    addBehaviour(new TickerBehaviour(this, 8000) {
-      protected void onTick() {
-        String analysis = analyzeWorkforce();
-        sendToGui("WORKER_ANALYSIS:" + analysis);
-
-        String terrain = analyzeTerrain();
-        sendToGui("TERRAIN_ANALYSIS:" + terrain);
-        sendToManager("TERRAIN_ANALYSIS:" + terrain);
-
-        String colonyReport = analyzeColonyNeeds();
-        if (!colonyReport.isEmpty()) {
-          sendToManager("COLONY_ANALYSIS:" + colonyReport);
+    nextPeriodicAnalysisAt = System.currentTimeMillis();
+    addBehaviour(new CyclicBehaviour() {
+      @Override
+      public void action() {
+        long now = System.currentTimeMillis();
+        if (now >= nextPeriodicAnalysisAt) {
+          runPeriodicAnalysis();
+          nextPeriodicAnalysisAt = now + SimulationSpeed.scaleDelay(PERIODIC_ANALYSIS_INTERVAL_MS);
         }
+        block(SimulationSpeed.scaleDelay(ANALYSIS_LOOP_BLOCK_MS));
       }
     });
+  }
+
+  private void runPeriodicAnalysis() {
+    String analysis = analyzeWorkforce();
+    sendToGui("WORKER_ANALYSIS:" + analysis);
+
+    String terrain = analyzeTerrain();
+    sendToGui("TERRAIN_ANALYSIS:" + terrain);
+    sendToManager("TERRAIN_ANALYSIS:" + terrain);
+
+    String colonyReport = analyzeColonyNeeds();
+    if (!colonyReport.isEmpty()) {
+      sendToManager("COLONY_ANALYSIS:" + colonyReport);
+    }
   }
 
   private boolean isResourceAbundant() {
