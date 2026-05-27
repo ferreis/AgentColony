@@ -299,6 +299,9 @@ public class ColonyMap {
 
         // Only check for terrain blocking inside the actual footprint
         if (dx >= 0 && dx < type.getWidth() && dy >= 0 && dy < type.getHeight()) {
+          if (type == BuildingType.HOUSE && tiles[ny][nx] == TerrainTile.WATER) {
+            return false;
+          }
           if (getTile(nx, ny).isBlocksMovement()) {
             return false;
           }

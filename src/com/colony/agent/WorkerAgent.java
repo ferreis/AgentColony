@@ -678,6 +678,19 @@ public class WorkerAgent extends ColonyAgentBase {
 
     // Combate e Caça
     for (com.colony.model.Animal a : map.getAnimals()) {
+      if (a.dead) {
+        continue;
+      }
+
+      if (isWolf(a) && isWithinRange(a, 3)) {
+        health = Math.max(0, health - 10);
+        sendGui("LOG: 🐺 " + npcName + " chegou perto demais de um lobo e levou uma mordida (-10 HP)!");
+        sleep(700);
+        return;
+      }
+    }
+
+    for (com.colony.model.Animal a : map.getAnimals()) {
       if (Math.abs(a.x - npcX) <= 2 && Math.abs(a.y - npcY) <= 2) {
         boolean isHunter = primarySkill == SkillType.WOOD_CUTTER || workerType.toLowerCase().contains("fighter")
             || workerType.toLowerCase().contains("hunter");
@@ -743,6 +756,14 @@ public class WorkerAgent extends ColonyAgentBase {
       }
       energy = Math.max(0, energy - 5);
     }
+  }
+
+  private boolean isWithinRange(com.colony.model.Animal animal, int range) {
+    return Math.abs(animal.x - npcX) <= range && Math.abs(animal.y - npcY) <= range;
+  }
+
+  private boolean isWolf(com.colony.model.Animal animal) {
+    return animal.type != null && animal.type.toLowerCase(Locale.ROOT).contains("lobo");
   }
 
   private int[] findRawWorkTile(String taskType) {

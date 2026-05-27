@@ -42,7 +42,7 @@ public class ColonyGUI {
     statusLabel.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
     topBar.add(statusLabel, BorderLayout.WEST);
 
-    JLabel versionLabel = new JLabel("v0.2.0");
+    JLabel versionLabel = new JLabel("v0.2.1");
     versionLabel.setForeground(new Color(150, 180, 220));
     versionLabel.setFont(new Font("Monospaced", Font.BOLD, 12));
     versionLabel.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 14));
@@ -172,7 +172,7 @@ public class ColonyGUI {
     JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 3));
     bottom.setBackground(new Color(50, 50, 60));
     statsLabel = new JLabel(" Trabalhadores: 0  |  Tarefas: 0  |  Mapa: "
-        + ColonyMap.WIDTH + "x" + ColonyMap.HEIGHT + " | v0.2.0");
+        + ColonyMap.WIDTH + "x" + ColonyMap.HEIGHT + " | v0.2.1");
     statsLabel.setForeground(Color.LIGHT_GRAY);
     statsLabel.setFont(new Font("Monospaced", Font.PLAIN, 11));
     bottom.add(statsLabel);
@@ -198,7 +198,7 @@ public class ColonyGUI {
   private void updateStats() {
     int w = workerModel.getRowCount();
     statsLabel.setText(" Trabalhadores: " + w + "  |  Tarefas (Total): " + totalTasks + "  |  Mapa: "
-        + ColonyMap.WIDTH + "x" + ColonyMap.HEIGHT + " | v0.2.0");
+        + ColonyMap.WIDTH + "x" + ColonyMap.HEIGHT + " | v0.2.1");
     statusLabel.setText(" Trabalhadores Ativos: " + w + "  |  Tarefas Abertas: " + taskActiveModel.getRowCount());
   }
 
