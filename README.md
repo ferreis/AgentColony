@@ -2,6 +2,22 @@
 
 Este documento descreve as regras que estao realmente implementadas no codigo atual em src/com/colony.
 
+## 0. Como Compilar e Executar
+
+Comandos de apoio para desenvolvimento (conforme Command.txt):
+
+1. Compilar o projeto:
+
+```bash
+mkdir -p bin && javac -cp "lib/_:src" -d bin $(find src -name "_.java")
+```
+
+2. Executar o projeto:
+
+```bash
+java -cp "lib/\*:bin" com.colony.Main
+```
+
 ## 1. Arquitetura Multiagente
 
 O sistema usa JADE com os seguintes agentes principais:
@@ -224,18 +240,3 @@ Periodicamente, o analista:
 - Spawn com chance aleatoria quando abaixo do limite.
 - Animais vivos se movem aleatoriamente em tiles transitaveis.
 - Animais mortos perdem rotTimer a cada tick e sao removidos quando chega a 0.
-
-## 8. Resumo das Correcos Aplicadas Neste README
-
-Este README foi alinhado ao comportamento atual do codigo, incluindo correcoes de:
-
-- caminho do codigo-fonte (src/com/colony);
-- estrutura real das abas de tarefas na GUI;
-- algoritmo de navegacao (BFS em vez de A\*);
-- regras efetivas de fome/sede/HP;
-- papel atual de estradas;
-- regras de auditoria, prazos e rework implementadas;
-- remocao do Deposito (STOCKPILE) do fluxo operacional;
-- capacidade por Armazem e expansao automatica quando lota;
-- exibicao da aba Recursos simplificada para texto (atual/maximo), sem barra de progresso;
-- remocao de regra especial de ouro na exibicao da GUI.

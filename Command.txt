@@ -1,2 +1,0 @@
-Build: mkdir -p bin && javac -cp "lib/*:src" -d bin $(find src -name "*.java")
-Rodar: java -cp "lib/*:bin" com.colony.Main
