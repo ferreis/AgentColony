@@ -31,10 +31,33 @@ Runtime rt = Runtime.instance();
 Profile p = new ProfileImpl(null, 1200, null);
 AgentContainer mainContainer = rt.createMainContainer(p);
 
-mainContainer.createNewAgent("manager", ManagerAgent.class.getName(), new Object[] { colonyMap, resources }).start();
-mainContainer.createNewAgent("analyst", AnalystAgent.class.getName(), new Object[] { colonyMap, resources }).start();
-mainContainer.createNewAgent("gui", GuiAgent.class.getName(), new Object[] { colonyMap, resources }).start();
-mainContainer.createNewAgent("wildlife", WildlifeAgent.class.getName(), new Object[] { colonyMap }).start();
+mainContainer.createNewAgent("manager", com.colony.agent.ManagerAgent.class.getName(),
+  new Object[] { colonyMap, resources }).start();
+mainContainer.createNewAgent("analyst", com.colony.agent.AnalystAgent.class.getName(),
+  new Object[] { colonyMap, resources }).start();
+mainContainer.createNewAgent("gui", com.colony.gui.GuiAgent.class.getName(),
+  new Object[] { colonyMap, resources }).start();
+mainContainer.createNewAgent("wildlife", com.colony.agent.WildlifeAgent.class.getName(),
+  new Object[] { colonyMap }).start();
+
+AgentController[] workers = {
+  mainContainer.createNewAgent("Urist", com.colony.agent.WorkerAgent.class.getName(),
+    new Object[] { "builder", colonyMap, resources }),
+  mainContainer.createNewAgent("Doren", com.colony.agent.WorkerAgent.class.getName(),
+    new Object[] { "miner", colonyMap, resources }),
+  mainContainer.createNewAgent("Logem", com.colony.agent.WorkerAgent.class.getName(),
+    new Object[] { "woodcutter", colonyMap, resources }),
+  mainContainer.createNewAgent("Kikrost", com.colony.agent.WorkerAgent.class.getName(),
+    new Object[] { "carpenter", colonyMap, resources }),
+  mainContainer.createNewAgent("Stinthad", com.colony.agent.WorkerAgent.class.getName(),
+    new Object[] { "smith", colonyMap, resources }),
+  mainContainer.createNewAgent("Meng", com.colony.agent.WorkerAgent.class.getName(),
+    new Object[] { "mason", colonyMap, resources }),
+  mainContainer.createNewAgent("Zasit", com.colony.agent.WorkerAgent.class.getName(),
+    new Object[] { "marbleworker", colonyMap, resources }),
+};
+for (AgentController w : workers)
+  w.start();
 ```
 
 ### 1.2 Ambiente compartilhado e propriedades
