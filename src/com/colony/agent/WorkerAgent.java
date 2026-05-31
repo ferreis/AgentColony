@@ -85,19 +85,19 @@ public class WorkerAgent extends ColonyAgentBase {
         if (!regAnalyst) {
           AID analyst = resolveService("analyst", "analyst");
           if (analyst != null) {
-          ACLMessage m = new ACLMessage(ACLMessage.REQUEST);
-          m.addReceiver(analyst);
-          m.setContent("REGISTER_SKILL:" + npcName + ":" + primarySkill.getKey());
-          send(m);
+            ACLMessage m = new ACLMessage(ACLMessage.REQUEST);
+            m.addReceiver(analyst);
+            m.setContent("REGISTER_SKILL:" + npcName + ":" + primarySkill.getKey());
+            send(m);
           }
         }
         if (!regManager) {
           AID manager = resolveService("manager", "manager");
           if (manager != null) {
-          ACLMessage m = new ACLMessage(ACLMessage.REQUEST);
-          m.addReceiver(manager);
-          m.setContent("REGISTER_WORKER");
-          send(m);
+            ACLMessage m = new ACLMessage(ACLMessage.REQUEST);
+            m.addReceiver(manager);
+            m.setContent("REGISTER_WORKER");
+            send(m);
           }
         }
 
@@ -305,8 +305,8 @@ public class WorkerAgent extends ColonyAgentBase {
     currentTaskId = taskId;
     int skLv = skills.getLevel(taskSkill);
     sendGui("WORKER_STATUS:" + npcName + ":" + taskSkill.getKey()
-      + ":" + skLv + ":" + skills.getRank(taskSkill) + ":ocupado:" + health + ":" + energy + ":" + fome + ":"
-      + sede);
+        + ":" + skLv + ":" + skills.getRank(taskSkill) + ":ocupado:" + health + ":" + energy + ":" + fome + ":"
+        + sede);
     String correctionText = currentTaskCorrection ? "correção de " : "";
     sendGui("LOG:" + npcName + " começou " + correctionText + taskSkill.getDisplayName()
         + " (" + skills.getRank(taskSkill) + " lv" + skLv + ", urgência " + currentTaskUrgency + ")");
@@ -388,16 +388,16 @@ public class WorkerAgent extends ColonyAgentBase {
       BuildingType bt = workshopTypeForTask(taskType);
       ColonyBuilding workshop = map.findNearestUnowned(bt, npcX, npcY);
       if (workshop != null) {
-        // Fetch materials from stockpile first
-        ColonyBuilding stockpile = map.findNearestUnowned(BuildingType.STOCKPILE, npcX, npcY);
-        if (stockpile != null) {
+        // Fetch materials from nearest completed warehouse first
+        ColonyBuilding warehouse = map.findNearestCompleted(BuildingType.WAREHOUSE, npcX, npcY);
+        if (warehouse != null) {
           sendGui("LOG:" + npcName + " está buscando materiais no armazém...");
-          int stx = stockpile.getX() + stockpile.getType().getWidth() / 2;
-          int sty = stockpile.getY() + stockpile.getType().getHeight() / 2;
+          int stx = warehouse.getX() + warehouse.getType().getWidth() / 2;
+          int sty = warehouse.getY() + warehouse.getType().getHeight() / 2;
           moveTowards(stx, sty);
           sleep(500); // Pegando recursos
         } else {
-          sendGui("LOG:" + npcName + " precisava de materiais mas não há depósito!");
+          sendGui("LOG:" + npcName + " precisava de materiais mas não há armazém operacional!");
         }
 
         workX = workshop.getX() + workshop.getType().getWidth() / 2;
@@ -542,8 +542,8 @@ public class WorkerAgent extends ColonyAgentBase {
     currentTaskId = null;
     currentTaskCorrection = false;
     sendGui("WORKER_STATUS:" + npcName + ":" + taskSkill.getKey()
-      + ":" + newLv + ":" + skills.getRank(taskSkill) + ":ocioso:" + health + ":" + energy + ":" + fome + ":"
-      + sede);
+        + ":" + newLv + ":" + skills.getRank(taskSkill) + ":ocioso:" + health + ":" + energy + ":" + fome + ":"
+        + sede);
   }
 
   private boolean ensureConstructionCostPaid(ColonyBuilding target, String taskId) {
@@ -630,10 +630,10 @@ public class WorkerAgent extends ColonyAgentBase {
 
     // Bebe água se estiver com sede
     if (sede <= 40) {
-      ColonyBuilding stockpile = map.findNearestUnowned(BuildingType.STOCKPILE, npcX, npcY);
-      if (stockpile != null)
-        moveTowards(stockpile.getX() + stockpile.getType().getWidth() / 2,
-            stockpile.getY() + stockpile.getType().getHeight() / 2);
+      ColonyBuilding warehouse = map.findNearestCompleted(BuildingType.WAREHOUSE, npcX, npcY);
+      if (warehouse != null)
+        moveTowards(warehouse.getX() + warehouse.getType().getWidth() / 2,
+            warehouse.getY() + warehouse.getType().getHeight() / 2);
 
       if (resources.get("agua") <= 0) {
         boolean collected = collectWaterFromWell(map, rand);
@@ -659,10 +659,10 @@ public class WorkerAgent extends ColonyAgentBase {
 
     // Come se estiver com fome
     if (fome <= 40) {
-      ColonyBuilding stockpile = map.findNearestUnowned(BuildingType.STOCKPILE, npcX, npcY);
-      if (stockpile != null)
-        moveTowards(stockpile.getX() + stockpile.getType().getWidth() / 2,
-            stockpile.getY() + stockpile.getType().getHeight() / 2);
+      ColonyBuilding warehouse = map.findNearestCompleted(BuildingType.WAREHOUSE, npcX, npcY);
+      if (warehouse != null)
+        moveTowards(warehouse.getX() + warehouse.getType().getWidth() / 2,
+            warehouse.getY() + warehouse.getType().getHeight() / 2);
 
       if (resources.consume("comida", 1)) {
         fome = 100;
@@ -923,11 +923,11 @@ public class WorkerAgent extends ColonyAgentBase {
           + "|" + skills.getLevel(primarySkill) + "|" + npcX + "|" + npcY + "|" + energy
           + "|" + (hasHouse ? "1" : "0") + "|" + (hasWorkshop ? "1" : "0");
       ACLMessage toManager = new ACLMessage(ACLMessage.INFORM);
-        toManager.addReceiver(manager);
+      toManager.addReceiver(manager);
       toManager.setContent(info);
       send(toManager);
       ACLMessage toAnalyst = new ACLMessage(ACLMessage.INFORM);
-        toAnalyst.addReceiver(analyst);
+      toAnalyst.addReceiver(analyst);
       toAnalyst.setContent(info);
       send(toAnalyst);
       // Atualiza energia na GUI

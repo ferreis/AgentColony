@@ -7,7 +7,7 @@ Este documento descreve as regras que estao realmente implementadas no codigo at
 O sistema usa JADE com os seguintes agentes principais:
 
 - WorkerAgent: executa tarefas, se move no mapa, coleta/consome recursos, descansa, luta e ganha XP.
-- ManagerAgent: cria tarefas, distribui por score, controla urgencia/prazo, reforca estoque minimo e pede novas construcoes.
+- ManagerAgent: cria tarefas, distribui por score, controla urgencia/prazo, reforca estoque minimo e pede novas construcoes, incluindo expansao de armazens quando a capacidade de recursos atinge o limite.
 - AnalystAgent: audita tarefas, analisa terreno/colonia e gera recomendacoes para o gerente.
 - WildlifeAgent: faz spawn e simulacao de animais.
 - GuiAgent: recebe eventos e atualiza a interface Swing.
@@ -31,6 +31,10 @@ Observacoes importantes:
 
 - Nao existe sub-aba separada "Em Espera" no estado atual.
 - O rodape mostra contagem consolidada de tarefas (ativas + concluidas).
+- A aba Recursos exibe cada item no formato textual "quantidade atual / capacidade maxima".
+- Nao existe barra de progresso visual na aba Recursos.
+- A atualizacao dos recursos permanece dinamica (coleta, consumo e mudancas de capacidade por construcao/remocao de armazens).
+- Nao ha regra especial para ocultar "ouro" na exibicao de recursos.
 
 ## 3. Mapa, Construcoes e Navegacao
 
@@ -39,7 +43,7 @@ Observacoes importantes:
 - Mapa 200x200 com geracao procedural.
 - Zona inicial central em piso (floor).
 - O mapa ja inicia com:
-  - 1 Deposito (STOCKPILE) com progresso 100%.
+  - 1 Armazem (WAREHOUSE) com progresso 100%.
   - 1 Poco (WELL) com progresso 100%.
 
 ### 3.2 Regras de colocacao de predios
@@ -98,8 +102,8 @@ Importante: nao existe penalidade de acelerar fome/sede quando HP < 100.
 
 ### 4.4 Regras de fome e sede
 
-- Com sede <= 40, prioriza beber no deposito.
-- Com fome <= 40, prioriza comer no deposito.
+- Com sede <= 40, prioriza beber no armazem.
+- Com fome <= 40, prioriza comer no armazem.
 - Se falta agua e existir poco concluido, pode coletar 2 a 4 de agua no poco.
 - Se nao conseguir atender necessidade basica, perde HP.
 
@@ -161,10 +165,30 @@ Para selecionar trabalhador:
 ### 5.3 Estoque e producao
 
 - O gerente trabalha com perfil de estoque (balanceado/agressivo/economico).
-- Se recurso fica abaixo do minimo, o gerente reforca automaticamente o estoque minimo.
-- Tambem cria tarefas de producao para buscar estoque alvo (madeira, pedra/ferro, comida, vara de pesca).
+- Se recurso fica abaixo do minimo, o gerente reforca automaticamente o estoque minimo respeitando a capacidade total disponivel dos armazens.
+- Tambem cria tarefas de producao para buscar estoque alvo (madeira, pedra/ferro, comida, vara de pesca), limitado pela capacidade total de armazenamento.
 
-### 5.4 Escalabilidade da colonia
+### 5.4 Capacidade de armazenamento por Armazem
+
+Cada Armazem (WAREHOUSE) adiciona a seguinte capacidade maxima:
+
+- Pedra: 250
+- Madeira: 250
+- Ferro: 200
+- Comida: 200
+- Agua: 100
+- Vara de pesca: 30
+
+Regras operacionais:
+
+- O fluxo operacional de armazenamento usa apenas Armazem (o tipo Deposito foi removido do fluxo).
+- Casas (HOUSE) nao armazenam recursos. Elas servem apenas como moradia/descanso e atribuicao de dono.
+- O inventario de recursos e global (ColonyResources) e a capacidade total depende da quantidade de armazens concluidos.
+- A capacidade total por recurso = capacidade por armazem x numero de armazens concluidos.
+- A GUI reflete essa capacidade em tempo real na aba Recursos, no formato textual "atual / maximo".
+- Se qualquer recurso atingir o limite maximo, ou se todos os recursos estiverem no maximo, o gerente agenda construcao de um novo Armazem.
+
+### 5.5 Escalabilidade da colonia
 
 - Quando ha casa concluida sem dono e condicoes atendidas, o gerente pode criar novo trabalhador.
 - A criacao depende de cooldown e disponibilidade de casa.
@@ -210,4 +234,8 @@ Este README foi alinhado ao comportamento atual do codigo, incluindo correcoes d
 - algoritmo de navegacao (BFS em vez de A\*);
 - regras efetivas de fome/sede/HP;
 - papel atual de estradas;
-- regras de auditoria, prazos e rework implementadas.
+- regras de auditoria, prazos e rework implementadas;
+- remocao do Deposito (STOCKPILE) do fluxo operacional;
+- capacidade por Armazem e expansao automatica quando lota;
+- exibicao da aba Recursos simplificada para texto (atual/maximo), sem barra de progresso;
+- remocao de regra especial de ouro na exibicao da GUI.

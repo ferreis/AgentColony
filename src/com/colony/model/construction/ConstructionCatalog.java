@@ -30,7 +30,6 @@ public final class ConstructionCatalog {
     registerWorkshop(catalog, BuildingType.TRADER);
 
     catalog.put(BuildingType.WAREHOUSE, new WarehouseConstruction(BuildingType.WAREHOUSE));
-    catalog.put(BuildingType.STOCKPILE, new WarehouseConstruction(BuildingType.STOCKPILE));
 
     catalog.put(BuildingType.ROAD, new RoadConstruction());
 

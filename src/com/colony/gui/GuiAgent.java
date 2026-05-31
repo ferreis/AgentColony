@@ -81,6 +81,7 @@ public class GuiAgent extends ColonyAgentBase {
             }
           } else if (content.startsWith("BUILD_UPDATE:")) {
             gui.getMapPanel().repaint();
+            gui.updateResources(resources);
           } else if (content.startsWith("TASK_STATUS:")) {
             String rest = content.substring("TASK_STATUS:".length());
             int firstColon = rest.indexOf(':');

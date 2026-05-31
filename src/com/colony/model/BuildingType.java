@@ -13,7 +13,6 @@ public enum BuildingType {
   KITCHEN("Cozinha", 4, 3, true, "industrial"),
   HOSPITAL("Hospital", 5, 5, true, "serviços"),
   BARRACKS("Quartel", 5, 5, true, "militar"),
-  STOCKPILE("Depósito", 5, 5, false, "armazenamento"),
   WELL("Poço", 2, 2, false, "infraestrutura"),
   TRADER("Posto Comercial", 4, 4, true, "comércio");
 
@@ -62,6 +61,6 @@ public enum BuildingType {
   }
 
   public boolean isWarehouseFamily() {
-    return this == WAREHOUSE || this == STOCKPILE;
+    return this == WAREHOUSE;
   }
 }

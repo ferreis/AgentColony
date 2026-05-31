@@ -59,14 +59,14 @@ public class ManagerAgent extends ColonyAgentBase {
   private static final long RAW_MATERIAL_FALLBACK_INTERVAL_MS = 15000;
   private static final long SCHEDULER_BLOCK_BASE_MS = 250;
 
-    private static final Map<String, Integer> MIN_STOCK_BALANCEADO = Map.of(
+  private static final Map<String, Integer> MIN_STOCK_BALANCEADO = Map.of(
       "madeira", 180,
       "pedra", 160,
       "ferro", 90,
       "comida", 80,
       "agua", 60,
       "vara de pesca", 4);
-    private static final Map<String, Integer> TARGET_STOCK_BALANCEADO = Map.of(
+  private static final Map<String, Integer> TARGET_STOCK_BALANCEADO = Map.of(
       "madeira", 260,
       "pedra", 240,
       "ferro", 140,
@@ -74,14 +74,14 @@ public class ManagerAgent extends ColonyAgentBase {
       "agua", 100,
       "vara de pesca", 6);
 
-    private static final Map<String, Integer> MIN_STOCK_AGRESSIVO = Map.of(
+  private static final Map<String, Integer> MIN_STOCK_AGRESSIVO = Map.of(
       "madeira", 280,
       "pedra", 260,
       "ferro", 160,
       "comida", 130,
       "agua", 110,
       "vara de pesca", 8);
-    private static final Map<String, Integer> TARGET_STOCK_AGRESSIVO = Map.of(
+  private static final Map<String, Integer> TARGET_STOCK_AGRESSIVO = Map.of(
       "madeira", 420,
       "pedra", 380,
       "ferro", 240,
@@ -89,14 +89,14 @@ public class ManagerAgent extends ColonyAgentBase {
       "agua", 190,
       "vara de pesca", 12);
 
-    private static final Map<String, Integer> MIN_STOCK_ECONOMICO = Map.of(
+  private static final Map<String, Integer> MIN_STOCK_ECONOMICO = Map.of(
       "madeira", 110,
       "pedra", 100,
       "ferro", 50,
       "comida", 55,
       "agua", 45,
       "vara de pesca", 2);
-    private static final Map<String, Integer> TARGET_STOCK_ECONOMICO = Map.of(
+  private static final Map<String, Integer> TARGET_STOCK_ECONOMICO = Map.of(
       "madeira", 170,
       "pedra", 150,
       "ferro", 90,
@@ -206,6 +206,7 @@ public class ManagerAgent extends ColonyAgentBase {
       @Override
       public void action() {
         long now = System.currentTimeMillis();
+        syncWarehouseCapacityWithBuildings();
 
         if (now >= nextDistributeTasksAt) {
           distributeTasks();
@@ -229,6 +230,7 @@ public class ManagerAgent extends ColonyAgentBase {
 
         if (now >= nextStockCheckAt) {
           ensureStockForWorkers();
+          ensureWarehouseCapacityExpansion();
           nextStockCheckAt = now + SimulationSpeed.scaleDelay(STOCK_CHECK_INTERVAL_MS);
         }
 
@@ -240,6 +242,29 @@ public class ManagerAgent extends ColonyAgentBase {
         block(SimulationSpeed.scaleDelay(SCHEDULER_BLOCK_BASE_MS));
       }
     });
+  }
+
+  private void syncWarehouseCapacityWithBuildings() {
+    boolean changed = resources.syncStorageCapacityFromMap(colonyMap);
+    if (changed) {
+      sendToGui("UPDATE_RESOURCES");
+    }
+  }
+
+  private void ensureWarehouseCapacityExpansion() {
+    boolean anyAtMax = resources.isAnyStorageAtCapacity();
+    boolean fullyMaxed = resources.isCompletelyFull();
+    if (!anyAtMax && !fullyMaxed) {
+      return;
+    }
+
+    if (hasIncompleteBuildFor(BuildingType.WAREHOUSE)) {
+      return;
+    }
+
+    createBuildTask(BuildingType.WAREHOUSE);
+    String reason = fullyMaxed ? "armazéns cheios" : "recurso no limite";
+    sendToGui("LOG:Gerente: capacidade de armazenamento no limite (" + reason + "). Novo armazém solicitado.");
   }
 
   private void runRawMaterialFallback() {
@@ -364,19 +389,22 @@ public class ManagerAgent extends ColonyAgentBase {
 
     for (Map.Entry<String, Integer> entry : minStock.entrySet()) {
       String resource = entry.getKey();
-      int minimum = entry.getValue();
+      int minimum = Math.min(entry.getValue(), resources.getTotalCapacity(resource));
       int current = resources.get(resource);
       if (current >= minimum) {
         continue;
       }
 
       int delta = minimum - current;
-      resources.add(resource, delta);
+      int added = resources.add(resource, delta);
+      if (added <= 0) {
+        continue;
+      }
       toppedUp = true;
       if (replenished.length() > 0) {
         replenished.append(", ");
       }
-      replenished.append(resource).append(" +").append(delta);
+      replenished.append(resource).append(" +").append(added);
     }
 
     if (toppedUp) {
@@ -388,20 +416,27 @@ public class ManagerAgent extends ColonyAgentBase {
   }
 
   private void requestProductionForTargetStock() {
-    if (resources.get("madeira") < targetStock.get("madeira") && getOpenTaskCount("woodcut") == 0) {
+    int targetMadeira = Math.min(targetStock.get("madeira"), resources.getTotalCapacity("madeira"));
+    int targetPedra = Math.min(targetStock.get("pedra"), resources.getTotalCapacity("pedra"));
+    int targetFerro = Math.min(targetStock.get("ferro"), resources.getTotalCapacity("ferro"));
+    int targetComida = Math.min(targetStock.get("comida"), resources.getTotalCapacity("comida"));
+    int targetAgua = Math.min(targetStock.get("agua"), resources.getTotalCapacity("agua"));
+    int targetVara = Math.min(targetStock.get("vara de pesca"), resources.getTotalCapacity("vara de pesca"));
+
+    if (resources.get("madeira") < targetMadeira && getOpenTaskCount("woodcut") == 0) {
       createTask("stock_wood", "woodcut");
     }
 
-    if ((resources.get("pedra") < targetStock.get("pedra") || resources.get("ferro") < targetStock.get("ferro"))
+    if ((resources.get("pedra") < targetPedra || resources.get("ferro") < targetFerro)
         && getOpenTaskCount("mine") == 0) {
       createTask("stock_mine", "mine");
     }
 
-    if (resources.get("comida") < targetStock.get("comida") && getOpenTaskCount("fish") == 0) {
+    if (resources.get("comida") < targetComida && getOpenTaskCount("fish") == 0) {
       createTask("stock_food", "fish");
     }
 
-    if (resources.get("vara de pesca") < targetStock.get("vara de pesca")
+    if (resources.get("vara de pesca") < targetVara
         && getOpenTaskCount("craft") == 0
         && getOpenTaskCount("carpenter") == 0) {
       createTask("stock_rods", "craft");
@@ -409,7 +444,7 @@ public class ManagerAgent extends ColonyAgentBase {
 
     boolean hasWellCompleted = colonyMap.getBuildings().stream()
         .anyMatch(b -> b.getType() == BuildingType.WELL && b.getProgress() >= 100);
-    if (resources.get("agua") < targetStock.get("agua")
+    if (resources.get("agua") < targetAgua
         && !hasWellCompleted
         && !hasIncompleteBuildFor(BuildingType.WELL)) {
       createBuildTask(BuildingType.WELL);
@@ -451,7 +486,7 @@ public class ManagerAgent extends ColonyAgentBase {
           WorkerAgent.class.getName(),
           new Object[] { workerType, colonyMap, resources });
       worker.start();
-        lastWorkerCreationAt = System.currentTimeMillis();
+      lastWorkerCreationAt = System.currentTimeMillis();
 
       sendToGui("LOG:Gerente criou novo trabalhador " + workerName
           + " (" + workerType + ")"
@@ -472,7 +507,7 @@ public class ManagerAgent extends ColonyAgentBase {
         return candidate;
       }
     }
-    
+
     return "WorkerAuto" + System.currentTimeMillis();
   }
 
@@ -825,7 +860,12 @@ public class ManagerAgent extends ColonyAgentBase {
   }
 
   private boolean hasIncompleteBuildFor(BuildingType bt) {
-    return tasks.stream().anyMatch(t -> !"approved".equals(t.status) && t.target != null && t.target.getType() == bt);
+    return tasks.stream().anyMatch(t -> {
+      if ("approved".equals(t.status) || t.target == null || t.target.getType() != bt) {
+        return false;
+      }
+      return t.target.getProgress() < 100;
+    });
   }
 
   private long getPendingTaskCount(String type) {
@@ -887,7 +927,7 @@ public class ManagerAgent extends ColonyAgentBase {
       return 4;
     if (target.getType() == BuildingType.WELL)
       return 5;
-    if (target.getType() == BuildingType.STOCKPILE)
+    if (target.getType() == BuildingType.WAREHOUSE)
       return 3;
     return 3;
   }
@@ -1000,7 +1040,7 @@ public class ManagerAgent extends ColonyAgentBase {
   private SkillType requiredSkill(TaskEntry task) {
     if (task.target != null) {
       return switch (task.target.getType()) {
-        case HOUSE, CARPENTER, WORKSHOP, STOCKPILE, WAREHOUSE, WELL -> SkillType.CARPENTER;
+        case HOUSE, CARPENTER, WORKSHOP, WAREHOUSE, WELL -> SkillType.CARPENTER;
         case ROAD -> SkillType.MASON;
         case MASON, CRAFTER, TRADER, HOSPITAL, BARRACKS -> SkillType.MASON;
         case SMITH -> SkillType.BLACKSMITH;

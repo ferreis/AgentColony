@@ -9,6 +9,14 @@ import java.util.*;
 import java.util.function.IntConsumer;
 
 public class ColonyGUI {
+  private static final java.util.List<String> RESOURCE_DISPLAY_ORDER = java.util.List.of(
+      "madeira",
+      "pedra",
+      "ferro",
+      "comida",
+      "agua",
+      "vara de pesca");
+
   private final JFrame frame;
   private final DefaultTableModel workerModel;
   private final DefaultTableModel taskActiveModel;
@@ -42,7 +50,7 @@ public class ColonyGUI {
     statusLabel.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
     topBar.add(statusLabel, BorderLayout.WEST);
 
-    JLabel versionLabel = new JLabel("v0.2.1");
+    JLabel versionLabel = new JLabel("v0.3.0");
     versionLabel.setForeground(new Color(150, 180, 220));
     versionLabel.setFont(new Font("Monospaced", Font.BOLD, 12));
     versionLabel.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 14));
@@ -172,7 +180,7 @@ public class ColonyGUI {
     JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 3));
     bottom.setBackground(new Color(50, 50, 60));
     statsLabel = new JLabel(" Trabalhadores: 0  |  Tarefas: 0  |  Mapa: "
-        + ColonyMap.WIDTH + "x" + ColonyMap.HEIGHT + " | v0.2.1");
+        + ColonyMap.WIDTH + "x" + ColonyMap.HEIGHT + " | v0.3.0");
     statsLabel.setForeground(Color.LIGHT_GRAY);
     statsLabel.setFont(new Font("Monospaced", Font.PLAIN, 11));
     bottom.add(statsLabel);
@@ -198,7 +206,7 @@ public class ColonyGUI {
   private void updateStats() {
     int w = workerModel.getRowCount();
     statsLabel.setText(" Trabalhadores: " + w + "  |  Tarefas (Total): " + totalTasks + "  |  Mapa: "
-        + ColonyMap.WIDTH + "x" + ColonyMap.HEIGHT + " | v0.2.1");
+        + ColonyMap.WIDTH + "x" + ColonyMap.HEIGHT + " | v0.3.0");
     statusLabel.setText(" Trabalhadores Ativos: " + w + "  |  Tarefas Abertas: " + taskActiveModel.getRowCount());
   }
 
@@ -354,12 +362,19 @@ public class ColonyGUI {
   private void updateResourceDisplay(ColonyResources res) {
     StringBuilder sb = new StringBuilder("  RECURSOS DA COLÔNIA\n");
     sb.append("  ────────────────────\n");
-    for (Map.Entry<String, Integer> e : res.getAll().entrySet()) {
-      if ("ouro".equalsIgnoreCase(e.getKey())) {
-        continue;
-      }
-      String bar = "█".repeat(Math.min(e.getValue() / 2, 20));
-      sb.append(String.format("  %-10s %3d  %s\n", e.getKey() + ":", e.getValue(), bar));
+
+    Map<String, Integer> amounts = res.getAll();
+    Map<String, Integer> capacities = res.getCapacitySnapshot();
+    java.util.LinkedHashSet<String> displayKeys = new java.util.LinkedHashSet<>(RESOURCE_DISPLAY_ORDER);
+    displayKeys.addAll(amounts.keySet());
+    displayKeys.addAll(capacities.keySet());
+
+    for (String key : displayKeys) {
+      int current = amounts.getOrDefault(key, 0);
+      int max = res.getTotalCapacity(key);
+      String maxText = max == Integer.MAX_VALUE ? "∞" : Integer.toString(max);
+
+      sb.append(String.format("  %-14s %6d / %-6s\n", key + ":", current, maxText));
     }
     resourceArea.setText(sb.toString());
   }
