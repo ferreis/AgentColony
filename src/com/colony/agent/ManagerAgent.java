@@ -49,12 +49,12 @@ public class ManagerAgent extends ColonyAgentBase {
   private static final long DEFAULT_DEADLINE_MS = 18000;
   private static final long BUILD_DEADLINE_MS = 26000;
   private static final int MAX_URGENCY = 5;
-  private static final int FOOD_THRESHOLD = 30;
-  private static final int WATER_THRESHOLD = 20;
+  private static final int FOOD_THRESHOLD = 50;
+  private static final int WATER_THRESHOLD = 50;
   private static final long DISTRIBUTE_TASKS_INTERVAL_MS = 4000;
   private static final long TASK_QUEUE_REPORT_INTERVAL_MS = 5000;
   private static final long RESOURCE_ANALYSIS_INTERVAL_MS = 10000;
-  private static final long ENSURE_WORKER_INTERVAL_MS = 7000;
+  private static final long ENSURE_WORKER_INTERVAL_MS = 10000;
   private static final long STOCK_CHECK_INTERVAL_MS = 6000;
   private static final long RAW_MATERIAL_FALLBACK_INTERVAL_MS = 15000;
   private static final long SCHEDULER_BLOCK_BASE_MS = 250;
@@ -104,7 +104,7 @@ public class ManagerAgent extends ColonyAgentBase {
       "agua", 75,
       "vara de pesca", 4);
 
-  private static final long WORKER_CREATION_COOLDOWN_MS = 5000;
+  private static final long WORKER_CREATION_COOLDOWN_MS = 8000;
   private static final List<String> RANDOM_NEW_WORKER_TYPES = List.of(
       "builder",
       "miner",

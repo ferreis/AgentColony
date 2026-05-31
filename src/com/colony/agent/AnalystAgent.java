@@ -17,7 +17,8 @@ public class AnalystAgent extends ColonyAgentBase {
   private final Map<String, Integer> workerCountBySkill = new HashMap<>();
   private final Map<String, WorkerStatus> workerStatuses = new HashMap<>();
   private long nextPeriodicAnalysisAt = 0L;
-  private static final int FOOD_THRESHOLD = 30;
+  private static final int WORKER_FOOD_ABUNDANCE_THRESHOLD = 50;
+  private static final int WORKER_WATER_ABUNDANCE_THRESHOLD = 50;
   private static final int WATER_THRESHOLD = 20;
   private static final long PERIODIC_ANALYSIS_INTERVAL_MS = 8000;
   private static final long ANALYSIS_LOOP_BLOCK_MS = 250;
@@ -137,7 +138,7 @@ public class AnalystAgent extends ColonyAgentBase {
   private boolean isResourceAbundant() {
     int food = resources.get("comida");
     int water = resources.get("agua");
-    return food > FOOD_THRESHOLD && water > WATER_THRESHOLD;
+    return food > WORKER_FOOD_ABUNDANCE_THRESHOLD && water > WORKER_WATER_ABUNDANCE_THRESHOLD;
   }
 
   private String analyzeColonyNeeds() {

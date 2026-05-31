@@ -190,9 +190,9 @@ Regras operacionais:
 
 ### 5.5 Escalabilidade da colonia
 
-- Quando ha casa concluida sem dono e condicoes atendidas, o gerente pode criar novo trabalhador.
-- A criacao depende de cooldown e disponibilidade de casa.
-- A abundancia de comida/agua e usada como gatilho de expansao.
+- O gerente tenta criar novo trabalhador em ciclo, a cada 10s de simulacao.
+- A criacao depende de casa concluida sem dono e cooldown minimo de 8s desde a ultima criacao.
+- A abundancia de recursos para gatilho de expansao usa: comida > 50 e agua > 50.
 
 ## 6. Regras do Analista
 
