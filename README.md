@@ -20,13 +20,334 @@ java -cp "lib/*:bin" com.colony.Main
 
 ## 1. Arquitetura Multiagente
 
-O sistema usa JADE com os seguintes agentes principais:
+Esta seção descreve a arquitetura do sistema baseada em JADE, detalhando cada agente, o ambiente compartilhado, sensores, atuadores, comportamentos e o protocolo de comunicação ACL.
 
-- WorkerAgent: executa tarefas, move-se no mapa, coleta/consome recursos, descansa, luta e ganha XP.
-- ManagerAgent: cria tarefas, distribui por score, controla urgência/prazo, reforça estoque mínimo e pede novas construções, incluindo expansão de armazéns quando a capacidade de recursos atinge o limite.
-- AnalystAgent: audita tarefas, analisa terreno/colônia e gera recomendações para o gerente.
-- WildlifeAgent: faz spawn e simulação de animais.
-- GuiAgent: recebe eventos e atualiza a interface Swing.
+### 1.1 Topologia e bootstrap do sistema
+
+O sistema inicializa um container JADE principal e sobe os agentes nesta ordem: Manager, Analyst, GUI, Wildlife e Workers iniciais.
+
+```java
+Runtime rt = Runtime.instance();
+Profile p = new ProfileImpl(null, 1200, null);
+AgentContainer mainContainer = rt.createMainContainer(p);
+
+mainContainer.createNewAgent("manager", ManagerAgent.class.getName(), new Object[] { colonyMap, resources }).start();
+mainContainer.createNewAgent("analyst", AnalystAgent.class.getName(), new Object[] { colonyMap, resources }).start();
+mainContainer.createNewAgent("gui", GuiAgent.class.getName(), new Object[] { colonyMap, resources }).start();
+mainContainer.createNewAgent("wildlife", WildlifeAgent.class.getName(), new Object[] { colonyMap }).start();
+```
+
+### 1.2 Ambiente compartilhado e propriedades
+
+Todos os agentes operam sobre um ambiente comum composto por mapa, recursos e velocidade de simulação.
+
+Propriedades principais do ambiente:
+
+- `ColonyMap`: grade 2D (`WIDTH=200`, `HEIGHT=200`), tiles, construções, posições de NPC, vínculo NPC-casa e fauna.
+- `ColonyBuilding`: posição (`x`,`y`), tipo, progresso de construção, dono e estado de custo de construção.
+- `ColonyResources`: inventário global, capacidade total por recurso baseada em construções concluídas e operações de `add/consume`.
+- `SimulationSpeed`: multiplicador global (`1x/2x/5x/10x`) e escalonamento temporal (`scaleDelay`).
+
+```java
+public static final int WIDTH = 200;
+public static final int HEIGHT = 200;
+private final TerrainTile[][] tiles;
+private final List<ColonyBuilding> buildings;
+private final Map<String, int[]> npcPositions;
+private final List<Animal> animals = new CopyOnWriteArrayList<>();
+```
+
+```java
+private final Map<String, Integer> resources;
+private final Map<String, Integer> totalStorageCapacity;
+
+public synchronized int add(String resource, int amount) { ... }
+public synchronized boolean consume(String resource, int amount) { ... }
+public synchronized boolean syncStorageCapacityFromMap(ColonyMap colonyMap) { ... }
+```
+
+```java
+public static long scaleDelay(long baseMs) {
+  long safeBase = Math.max(1L, baseMs);
+  int multiplier = Math.max(1, getMultiplier());
+  return Math.max(1L, safeBase / multiplier);
+}
+```
+
+### 1.3 Infraestrutura JADE comum (`ColonyAgentBase`)
+
+Todos os agentes de domínio estendem `ColonyAgentBase`, que centraliza descoberta e registro de serviços no DF do JADE.
+
+Responsabilidades da base:
+
+- Registrar serviço no DF (`registerService`).
+- Resolver serviços por tipo com cache local e fallback por nome (`resolveService`).
+- Desregistrar do DF no encerramento (`takeDown`).
+
+```java
+protected void registerService(String serviceType) { ... DFService.register(this, dfd); }
+
+protected AID resolveService(String serviceType, String fallbackLocalName) { ... }
+
+@Override
+protected void takeDown() {
+  DFService.deregister(this);
+}
+```
+
+### 1.4 WorkerAgent
+
+Objetivo:
+
+- Executar tarefas operacionais (coleta, construção, produção, combate), manter estado fisiológico e reportar continuamente o próprio estado.
+
+Sensores:
+
+- Mensagens ACL: `ASSIGN_TASK`, confirmações `REGISTERED`.
+- Estado do mapa: tiles, construções, casa atribuída e oficinas concluídas.
+- Estado de recursos globais: disponibilidade e consumo para tarefas.
+- Estado interno: `health`, `energy`, `fome`, `sede`, skills.
+
+Atuadores:
+
+- Movimentação no mapa e execução de ações de trabalho.
+- Consumo/produção de recursos (`consume/add`).
+- Envio de status, conclusão/rejeição de tarefa e eventos para Manager/Analyst/GUI.
+- Auto-encerramento (`doDelete`) quando morre.
+
+Comportamentos principais:
+
+- `CyclicBehaviour` de mensageria e registro em Analyst/Manager.
+- `CyclicBehaviour` de ação automática quando ocioso.
+- `CyclicBehaviour` periódico de status (fome/sede/HP e relatório).
+- `OneShotBehaviour` para execução da tarefa aceita.
+
+```java
+addBehaviour(new CyclicBehaviour() {
+  public void action() {
+    if (!regAnalyst) {
+      AID analyst = resolveService("analyst", "analyst");
+      if (analyst != null) {
+        ACLMessage m = new ACLMessage(ACLMessage.REQUEST);
+        m.addReceiver(analyst);
+        m.setContent("REGISTER_SKILL:" + npcName + ":" + primarySkill.getKey());
+        send(m);
+      }
+    }
+
+    if (!regManager) {
+      AID manager = resolveService("manager", "manager");
+      if (manager != null) {
+        ACLMessage m = new ACLMessage(ACLMessage.REQUEST);
+        m.addReceiver(manager);
+        m.setContent("REGISTER_WORKER");
+        send(m);
+      }
+    }
+
+    ACLMessage msg = receive();
+    if (msg != null && msg.getContent().startsWith("ASSIGN_TASK:")) {
+      String[] p = msg.getContent().split(":");
+      acceptTask(p[1], p[2]);
+    } else {
+      block(SimulationSpeed.scaleDelay(MESSAGE_LOOP_BLOCK_MS));
+    }
+  }
+});
+```
+
+```java
+ACLMessage done = new ACLMessage(ACLMessage.INFORM);
+done.addReceiver(manager);
+done.setContent(messageType + taskId + "|" + reportX + "|" + reportY + "|" + progress + "|" + taskType);
+send(done);
+```
+
+### 1.5 ManagerAgent
+
+Objetivo:
+
+- Coordenar a colônia: criação e distribuição de tarefas, gerenciamento de estoque/capacidade, expansão de infraestrutura e criação de novos workers.
+
+Sensores:
+
+- Mensagens de workers: `REGISTER_WORKER`, `WORKER_INFO`, `TASK_COMPLETE`, `TASK_TIMEOUT`, `TASK_REJECTED`.
+- Mensagens do analista: `VERIFICATION_RESULT`, `TERRAIN_ANALYSIS`, `COLONY_ANALYSIS`, `DEADLINE_REPORT`, `RESOURCE_ABUNDANCE_RESULT`.
+- Estado do ambiente: recursos, capacidade e construções concluídas/incompletas.
+
+Atuadores:
+
+- Criar tarefas e tarefas de construção.
+- Atribuir tarefas aos workers por score.
+- Ajustar estoque e requisitar produção.
+- Criar novos agentes worker no container JADE.
+- Publicar eventos de estado para GUI e dados para Analyst.
+
+Comportamentos principais:
+
+- `CyclicBehaviour` de caixa de mensagens (`receive -> handleMessage`).
+- `CyclicBehaviour` de scheduler dinâmico com múltiplos ciclos temporizados.
+
+```java
+addBehaviour(new CyclicBehaviour() {
+  public void action() {
+    ACLMessage msg = receive();
+    if (msg != null) handleMessage(msg);
+    else block();
+  }
+});
+```
+
+```java
+if (now >= nextDistributeTasksAt) distributeTasks();
+if (now >= nextResourceAnalysisAt) requestResourceAbundanceAnalysis();
+if (now >= nextEnsureWorkerAt) ensureWorkerForAvailableHouse();
+if (now >= nextStockCheckAt) {
+  ensureStockForWorkers();
+  ensureWarehouseCapacityExpansion();
+}
+```
+
+```java
+ACLMessage msg = new ACLMessage(ACLMessage.REQUEST);
+msg.addReceiver(new AID(best.name, AID.ISLOCALNAME));
+msg.setContent("ASSIGN_TASK:" + task.id + ":" + task.type + extra + ":" + task.deadlineAt + ":" + task.urgency);
+send(msg);
+```
+
+### 1.6 AnalystAgent
+
+Objetivo:
+
+- Auditar qualidade/consistência das tarefas, analisar capacidade da colônia e recomendar ações táticas ao gerente.
+
+Sensores:
+
+- Mensagens ACL: `VERIFY_TASK`, `REGISTER_SKILL`, `WORKER_INFO`, `TASK_QUEUE_REPORT`, `REQUEST_RESOURCE_ABUNDANCE`.
+- Estado de mapa/recursos para inferir necessidades (casas, poço, oficinas, continuidade de obra).
+
+Atuadores:
+
+- Responder auditoria com `VERIFICATION_RESULT`.
+- Emitir sinais para o gerente (`COLONY_ANALYSIS`, `TERRAIN_ANALYSIS`, `DEADLINE_REPORT`, `SCALE_ALERT`, `RESOURCE_ABUNDANCE_RESULT`).
+- Publicar análises para GUI (`WORKER_ANALYSIS`, logs e terreno).
+
+Comportamentos principais:
+
+- `CyclicBehaviour` reativo de mensagens (auditoria e registro).
+- `CyclicBehaviour` periódico para análise de força de trabalho, terreno e necessidades da colônia.
+
+```java
+if (content.startsWith("VERIFY_TASK:")) {
+  String result = verifyTask(payload);
+  ACLMessage reply = msg.createReply();
+  reply.setContent("VERIFICATION_RESULT:" + result);
+  send(reply);
+}
+```
+
+```java
+if (now >= nextPeriodicAnalysisAt) {
+  sendToGui("WORKER_ANALYSIS:" + analyzeWorkforce());
+  sendToManager("TERRAIN_ANALYSIS:" + analyzeTerrain());
+  sendToManager("COLONY_ANALYSIS:" + analyzeColonyNeeds());
+}
+```
+
+### 1.7 WildlifeAgent
+
+Objetivo:
+
+- Simular fauna (spawn, movimentação e decomposição de carcaças) e acionar atualização visual do mapa.
+
+Sensores:
+
+- Estado do mapa e da lista de animais.
+- Tempo de simulação escalado (`SimulationSpeed.scaleDelay`).
+
+Atuadores:
+
+- Inserir/remover/mover animais no ambiente.
+- Notificar GUI para repaint do mapa.
+
+Comportamento principal:
+
+- `CyclicBehaviour` com tick periódico de fauna.
+
+```java
+if (map.getAnimals().size() < MAX_WILD_ANIMALS && random.nextInt(3) == 0) {
+  int x = random.nextInt(ColonyMap.WIDTH);
+  int y = random.nextInt(ColonyMap.HEIGHT);
+  if (!map.getTile(x, y).isBlocksMovement()) {
+    boolean aggro = random.nextInt(4) == 0;
+    String type = aggro ? "Lobo" : "Cervo";
+    map.addAnimal(new Animal(x, y, aggro ? 50 : 20, aggro, type));
+  }
+}
+
+for (Animal a : map.getAnimals()) {
+  if (a.dead) {
+    a.rotTimer--;
+    if (a.rotTimer <= 0) map.removeAnimal(a);
+  } else {
+    int nx = a.x + random.nextInt(3) - 1;
+    int ny = a.y + random.nextInt(3) - 1;
+    if (map.inBounds(nx, ny) && !map.getTile(nx, ny).isBlocksMovement()) {
+      a.x = nx;
+      a.y = ny;
+    }
+  }
+}
+
+notifyGuiMapRefresh();
+```
+
+### 1.8 GuiAgent
+
+Objetivo:
+
+- Ser o adaptador entre mensagens ACL do sistema e atualizações visuais da interface Swing.
+
+Sensores:
+
+- Mensagens ACL de múltiplos agentes (`WORKER_STATUS`, `WORKER_DETAILS`, `NPC_POSITION`, `TASK_STATUS`, `BUILD_UPDATE`, `UPDATE_RESOURCES`, `LOG`, `WORKER_ANALYSIS`, `TERRAIN_ANALYSIS`).
+
+Atuadores:
+
+- Atualizar componentes da GUI (`ColonyGUI`) e disparar `repaint` de mapa.
+
+Comportamento principal:
+
+- `CyclicBehaviour` de roteamento de mensagens para métodos de UI.
+
+```java
+if (gui == null) {
+  block();
+  return;
+}
+
+ACLMessage msg = receive();
+if (msg == null) {
+  block();
+  return;
+}
+
+String content = msg.getContent();
+if (content.startsWith("WORKER_STATUS:")) gui.updateWorker(...);
+else if (content.startsWith("BUILD_UPDATE:")) { gui.getMapPanel().repaint(); gui.updateResources(resources); }
+else if (content.startsWith("TASK_STATUS:")) gui.updateTask(...);
+```
+
+### 1.9 Protocolo de comunicação ACL (mensagens principais)
+
+Fluxos mais relevantes do sistema:
+
+- Worker -> Analyst: `REGISTER_SKILL`, `WORKER_INFO`
+- Worker -> Manager: `REGISTER_WORKER`, `WORKER_INFO`, `TASK_COMPLETE`, `TASK_TIMEOUT`, `TASK_REJECTED`
+- Manager -> Worker: `ASSIGN_TASK`
+- Manager -> Analyst: `VERIFY_TASK`, `TASK_QUEUE_REPORT`, `REQUEST_RESOURCE_ABUNDANCE`
+- Analyst -> Manager: `VERIFICATION_RESULT`, `COLONY_ANALYSIS`, `TERRAIN_ANALYSIS`, `DEADLINE_REPORT`, `RESOURCE_ABUNDANCE_RESULT`, `SCALE_ALERT`
+- Manager/Worker/Analyst/Wildlife -> GUI: `LOG`, `WORKER_STATUS`, `WORKER_DETAILS`, `TASK_STATUS`, `BUILD_UPDATE`, `UPDATE_RESOURCES`, `WORKER_ANALYSIS`, `TERRAIN_ANALYSIS`
 
 ## 2. Interface (GUI)
 
