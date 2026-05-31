@@ -39,8 +39,14 @@ public class GuiAgent extends ColonyAgentBase {
 
     addBehaviour(new CyclicBehaviour() {
       public void action() {
+        // Keep ACL messages queued until the Swing GUI is ready.
+        if (gui == null) {
+          block();
+          return;
+        }
+
         ACLMessage msg = receive();
-        if (msg != null && gui != null) {
+        if (msg != null) {
           String content = msg.getContent();
 
           if (content.startsWith("WORKER_STATUS:")) {
