@@ -6,6 +6,7 @@ import java.util.*;
 public class ColonyMap {
   public static final int WIDTH = 200;
   public static final int HEIGHT = 200;
+  private final int terrainSeed;
   private final TerrainTile[][] tiles;
   private final List<ColonyBuilding> buildings;
   private final Map<String, int[]> npcPositions;
@@ -14,6 +15,11 @@ public class ColonyMap {
   private final List<Animal> animals = new CopyOnWriteArrayList<>();
 
   public ColonyMap() {
+    this(new Random().nextInt());
+  }
+
+  public ColonyMap(int terrainSeed) {
+    this.terrainSeed = terrainSeed;
     this.tiles = new TerrainTile[HEIGHT][WIDTH];
     this.buildings = new CopyOnWriteArrayList<>();
     this.npcPositions = new HashMap<>();
@@ -68,7 +74,7 @@ public class ColonyMap {
   private double noise(double x, double y) {
     int ix = (int) Math.floor(x), iy = (int) Math.floor(y);
     double fx = x - ix, fy = y - iy;
-    int seed = 12345;
+    int seed = terrainSeed;
     double v00 = hash(ix + seed, iy + seed);
     double v10 = hash(ix + 1 + seed, iy + seed);
     double v01 = hash(ix + seed, iy + 1 + seed);

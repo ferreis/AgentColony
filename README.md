@@ -398,7 +398,7 @@ Observações importantes:
 
 ### 3.1 Terreno e início da colônia
 
-- Mapa 200x200 com geração procedural.
+- Mapa 200x200 com geração procedural e variação aleatória a cada execução.
 - Zona inicial central em piso (floor).
 - O mapa já inicia com:
   - 1 Armazém (WAREHOUSE) com progresso em 100%.
