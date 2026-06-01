@@ -6,7 +6,7 @@ public enum TerrainTile {
   STONE("pedra", "#", true),
   MOUNTAIN("montanha", "^", true),
   TREE("árvore", "T", true),
-  WATER("água", "~", false),
+  WATER("água", "~", true),
   SAND("areia", "s", false),
   WALL("parede", "|", true),
   FLOOR("chão", "_", false);
