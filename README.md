@@ -456,7 +456,8 @@ Importante: não existe penalidade de acelerar fome/sede quando HP < 100.
 - Se energia <= 30, entra em descanso até energia 100.
 - Tenta dormir em casa (tile central da casa atribuída).
 - Se chega em casa: recupera de 10 a 24 de energia por ciclo.
-- Sem casa ou sem conseguir chegar: descansa no relento e recupera de 5 a 14.
+- Se não tem casa: descansa no relento e recupera de 5 a 14.
+- Se tem casa, mas não consegue chegar no tile central naquele ciclo: não recupera energia nesse ciclo.
 
 ### 4.4 Regras de fome e sede
 
@@ -483,6 +484,9 @@ Se não tiver a skill da tarefa, aprende automaticamente no nível 1.
 - Se faltar recurso para o custo da construção, a tarefa é rejeitada.
 - Pesca consome 1 vara de pesca por tentativa.
 - Coleta (madeira/pedra/comida) gera rendimento escalonado por nível da skill.
+- Na mineração, o worker prioriza pedra/montanha com posição adjacente realmente acessível por caminho.
+- Se a rota de mineração estiver bloqueada por madeira, tenta remover primeiro a árvore que bloqueia o acesso.
+- Se não houver pedra acessível (ou não conseguir alcançar posição válida para minerar), a tarefa é rejeitada.
 
 ### 4.7 Combate, caça e carcaça
 

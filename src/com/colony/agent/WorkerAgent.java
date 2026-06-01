@@ -46,11 +46,30 @@ public class WorkerAgent extends ColonyAgentBase {
   private static final long MESSAGE_LOOP_BLOCK_MS = 300;
   private static final long AUTO_ACT_LOOP_BLOCK_MS = 3000;
   private static final long STATUS_LOOP_BLOCK_MS = 250;
+  private static final int RAW_SEARCH_RADIUS = 80;
+  private static final int[][] ADJACENT_DIRS = {
+      { 0, -1 }, { 0, 1 }, { -1, 0 }, { 1, 0 },
+      { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 }
+  };
 
   // Tipos de trabalho que NÃO precisam de construção
   private static final Set<String> RAW_TASKS = Set.of(
       "mine", "mining", "dig", "woodcut", "woodcutting", "chop",
       "harvest", "gather", "collect", "fish", "fishing", "water");
+
+  private static final class RawWorkTarget {
+    final int resourceX;
+    final int resourceY;
+    final int workX;
+    final int workY;
+
+    RawWorkTarget(int resourceX, int resourceY, int workX, int workY) {
+      this.resourceX = resourceX;
+      this.resourceY = resourceY;
+      this.workX = workX;
+      this.workY = workY;
+    }
+  }
 
   protected void setup() {
     registerService("worker");
@@ -366,12 +385,60 @@ public class WorkerAgent extends ColonyAgentBase {
     int workX, workY;
     int actionX = -1, actionY = -1;
     if (isRaw) {
-      int[] rawTile = findRawWorkTile(taskType);
-      actionX = rawTile[0];
-      actionY = rawTile[1];
-      int[] openTile = map.findNearestOpenTile(actionX, actionY);
-      workX = openTile[0];
-      workY = openTile[1];
+      if (isMiningTask(t)) {
+        RawWorkTarget rawTarget = findReachableRawWorkTarget(taskType);
+        if (rawTarget == null) {
+          RawWorkTarget obstacle = findTreeObstacleForMining(taskType);
+          if (obstacle != null) {
+            sendGui("LOG:" + npcName + " encontrou uma rota bloqueada por madeira e vai abrir passagem.");
+            moveTowards(obstacle.workX, obstacle.workY);
+            if (!isAdjacent(obstacle.resourceX, obstacle.resourceY, npcX, npcY)) {
+              sendGui("LOG:" + npcName + " não conseguiu alcançar a madeira que bloqueava o caminho.");
+              sendReject(taskId);
+              return;
+            }
+
+            if (map.getTile(obstacle.resourceX, obstacle.resourceY) == TerrainTile.TREE) {
+              map.setTile(obstacle.resourceX, obstacle.resourceY, TerrainTile.GRASS);
+              sendGui("BUILD_UPDATE:" + obstacle.resourceX + ":" + obstacle.resourceY);
+              sendGui("LOG:" + npcName + " removeu madeira para liberar acesso à extração de pedra.");
+            }
+            rawTarget = findReachableRawWorkTarget(taskType);
+          }
+        }
+
+        if (rawTarget == null) {
+          sendGui("LOG:" + npcName + " não encontrou pedra acessível para a tarefa " + taskId + ".");
+          sendReject(taskId);
+          return;
+        }
+
+        actionX = rawTarget.resourceX;
+        actionY = rawTarget.resourceY;
+        workX = rawTarget.workX;
+        workY = rawTarget.workY;
+      } else {
+        RawWorkTarget rawTarget = findReachableRawWorkTarget(taskType);
+        if (rawTarget != null) {
+          actionX = rawTarget.resourceX;
+          actionY = rawTarget.resourceY;
+          workX = rawTarget.workX;
+          workY = rawTarget.workY;
+        } else {
+          int[] rawTile = findNearestRawTile(taskType);
+          if (rawTile == null) {
+            rawTile = new int[] {
+                Math.max(1, Math.min(ColonyMap.WIDTH - 2, npcX)),
+                Math.max(1, Math.min(ColonyMap.HEIGHT - 2, npcY))
+            };
+          }
+          actionX = rawTile[0];
+          actionY = rawTile[1];
+          int[] openTile = map.findNearestOpenTile(actionX, actionY);
+          workX = openTile[0];
+          workY = openTile[1];
+        }
+      }
     } else if (taskTargetX >= 0 && taskTargetY >= 0) {
       ColonyBuilding target = map.getBuildingAt(taskTargetX, taskTargetY);
       if (target != null) {
@@ -410,6 +477,12 @@ public class WorkerAgent extends ColonyAgentBase {
     workX = Math.max(1, Math.min(ColonyMap.WIDTH - 2, workX));
     workY = Math.max(1, Math.min(ColonyMap.HEIGHT - 2, workY));
     moveTowards(workX, workY);
+
+    if (isRaw && isMiningTask(t) && !isAdjacent(actionX, actionY, npcX, npcY)) {
+      sendGui("LOG:" + npcName + " não conseguiu chegar até uma posição válida para minerar na tarefa " + taskId + ".");
+      sendReject(taskId);
+      return;
+    }
 
     int duration = 1000 + rand.nextInt(2000);
     int xpGain = 30 + rand.nextInt(80);
@@ -766,13 +839,121 @@ public class WorkerAgent extends ColonyAgentBase {
     return animal.type != null && animal.type.toLowerCase(Locale.ROOT).contains("lobo");
   }
 
-  private int[] findRawWorkTile(String taskType) {
+  private boolean isMiningTask(String normalizedTaskType) {
+    return normalizedTaskType.contains("mine") || normalizedTaskType.contains("dig");
+  }
+
+  private boolean isAdjacent(int x1, int y1, int x2, int y2) {
+    return Math.abs(x1 - x2) <= 1 && Math.abs(y1 - y2) <= 1;
+  }
+
+  private RawWorkTarget findReachableRawWorkTarget(String taskType) {
     ColonyMap map = colonyMap;
     String type = taskType.toLowerCase();
     TerrainTile firstChoice = type.contains("wood") ? TerrainTile.TREE : TerrainTile.STONE;
     TerrainTile secondChoice = type.contains("wood") ? TerrainTile.TREE : TerrainTile.MOUNTAIN;
 
-    for (int radius = 1; radius <= 80; radius++) {
+    for (int radius = 1; radius <= RAW_SEARCH_RADIUS; radius++) {
+      for (int offsetY = -radius; offsetY <= radius; offsetY++) {
+        for (int offsetX = -radius; offsetX <= radius; offsetX++) {
+          if (Math.abs(offsetX) != radius && Math.abs(offsetY) != radius)
+            continue;
+
+          int candidateX = npcX + offsetX;
+          int candidateY = npcY + offsetY;
+          if (!map.inBounds(candidateX, candidateY))
+            continue;
+
+          TerrainTile tile = map.getTile(candidateX, candidateY);
+          if (tile == firstChoice || tile == secondChoice) {
+            int[] workTile = findReachableAdjacentOpenTile(candidateX, candidateY);
+            if (workTile != null) {
+              return new RawWorkTarget(candidateX, candidateY, workTile[0], workTile[1]);
+            }
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private RawWorkTarget findTreeObstacleForMining(String taskType) {
+    int[] nearestStone = findNearestRawTile(taskType);
+    if (nearestStone == null) {
+      return null;
+    }
+
+    RawWorkTarget lineObstacle = findReachableTreeOnLine(nearestStone[0], nearestStone[1]);
+    if (lineObstacle != null) {
+      return lineObstacle;
+    }
+
+    ColonyMap map = colonyMap;
+    for (int radius = 1; radius <= 4; radius++) {
+      for (int offsetY = -radius; offsetY <= radius; offsetY++) {
+        for (int offsetX = -radius; offsetX <= radius; offsetX++) {
+          if (Math.abs(offsetX) != radius && Math.abs(offsetY) != radius)
+            continue;
+
+          int candidateX = nearestStone[0] + offsetX;
+          int candidateY = nearestStone[1] + offsetY;
+          if (!map.inBounds(candidateX, candidateY))
+            continue;
+
+          if (map.getTile(candidateX, candidateY) != TerrainTile.TREE) {
+            continue;
+          }
+
+          int[] workTile = findReachableAdjacentOpenTile(candidateX, candidateY);
+          if (workTile != null) {
+            return new RawWorkTarget(candidateX, candidateY, workTile[0], workTile[1]);
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  private RawWorkTarget findReachableTreeOnLine(int targetX, int targetY) {
+    ColonyMap map = colonyMap;
+    int x = npcX;
+    int y = npcY;
+    int dx = Math.abs(targetX - x);
+    int dy = Math.abs(targetY - y);
+    int sx = x < targetX ? 1 : -1;
+    int sy = y < targetY ? 1 : -1;
+    int err = dx - dy;
+
+    while (!(x == targetX && y == targetY)) {
+      if (!(x == npcX && y == npcY) && !(x == targetX && y == targetY)
+          && map.inBounds(x, y) && map.getTile(x, y) == TerrainTile.TREE) {
+        int[] workTile = findReachableAdjacentOpenTile(x, y);
+        if (workTile != null) {
+          return new RawWorkTarget(x, y, workTile[0], workTile[1]);
+        }
+      }
+
+      int e2 = 2 * err;
+      if (e2 > -dy) {
+        err -= dy;
+        x += sx;
+      }
+      if (e2 < dx) {
+        err += dx;
+        y += sy;
+      }
+    }
+    return null;
+  }
+
+  private int[] findNearestRawTile(String taskType) {
+    ColonyMap map = colonyMap;
+    String type = taskType.toLowerCase();
+    TerrainTile firstChoice = type.contains("wood") ? TerrainTile.TREE : TerrainTile.STONE;
+    TerrainTile secondChoice = type.contains("wood") ? TerrainTile.TREE : TerrainTile.MOUNTAIN;
+
+    for (int radius = 1; radius <= RAW_SEARCH_RADIUS; radius++) {
       for (int offsetY = -radius; offsetY <= radius; offsetY++) {
         for (int offsetX = -radius; offsetX <= radius; offsetX++) {
           if (Math.abs(offsetX) != radius && Math.abs(offsetY) != radius)
@@ -790,11 +971,42 @@ public class WorkerAgent extends ColonyAgentBase {
         }
       }
     }
+    return null;
+  }
 
-    return new int[] {
-        Math.max(1, Math.min(ColonyMap.WIDTH - 2, npcX)),
-        Math.max(1, Math.min(ColonyMap.HEIGHT - 2, npcY))
-    };
+  private int[] findReachableAdjacentOpenTile(int resourceX, int resourceY) {
+    ColonyMap map = colonyMap;
+    int[] best = null;
+    int bestDistance = Integer.MAX_VALUE;
+
+    for (int[] d : ADJACENT_DIRS) {
+      int workX = resourceX + d[0];
+      int workY = resourceY + d[1];
+
+      if (!map.inBounds(workX, workY)) {
+        continue;
+      }
+      if (map.getTile(workX, workY).isBlocksMovement() || map.getBuildingAt(workX, workY) != null) {
+        continue;
+      }
+
+      if (workX == npcX && workY == npcY) {
+        return new int[] { workX, workY };
+      }
+
+      List<int[]> path = map.findPath(npcX, npcY, workX, workY);
+      if (path == null || path.isEmpty()) {
+        continue;
+      }
+
+      int distance = path.size();
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = new int[] { workX, workY };
+      }
+    }
+
+    return best;
   }
 
   private boolean collectWaterFromWell(ColonyMap map, Random rand) {
