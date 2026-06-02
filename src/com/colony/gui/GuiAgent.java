@@ -58,6 +58,11 @@ public class GuiAgent extends ColonyAgentBase {
               String sede = p.length >= 9 ? p[8] : "100";
               gui.updateWorker(p[0], p[1], p[2], p[3], p[4], vida, energia, fome, sede);
             }
+          } else if (content.startsWith("WORKER_DEAD:")) {
+            String workerName = content.substring("WORKER_DEAD:".length()).trim();
+            if (!workerName.isEmpty()) {
+              gui.removeWorker(workerName);
+            }
           } else if (content.startsWith("WORKER_DETAILS:")) {
             String data = content.substring("WORKER_DETAILS:".length());
             String[] parts = data.split("\\|");

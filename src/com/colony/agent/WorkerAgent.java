@@ -37,6 +37,7 @@ public class WorkerAgent extends ColonyAgentBase {
   private long currentTaskDeadline = 0L;
   private int currentTaskUrgency = 1;
   private boolean currentTaskCorrection = false;
+  private boolean deathNotified = false;
   private boolean restingUntilFull = false;
   private int hungerDecayAccumulator = 0;
   private long nextStatusReportAt = 0L;
@@ -184,7 +185,9 @@ public class WorkerAgent extends ColonyAgentBase {
 
   private void performPeriodicStatusReport() {
     if (health <= 0 || fome <= 0 || sede <= 0) {
-      sendGui("LOG: ☠️ " + npcName + " MORREU (Fome:" + fome + " Sede:" + sede + " HP:" + health + ")");
+      if (!deathNotified) {
+        notifyDeath();
+      }
       doDelete();
       return;
     }
@@ -205,6 +208,29 @@ public class WorkerAgent extends ColonyAgentBase {
 
     if (regManager) {
       sendInfoToManager();
+    }
+  }
+
+  private void notifyDeath() {
+    deathNotified = true;
+
+    int safeHealth = Math.max(0, health);
+    int safeEnergy = Math.max(0, energy);
+    int safeFome = Math.max(0, fome);
+    int safeSede = Math.max(0, sede);
+
+    sendGui("WORKER_STATUS:" + npcName + ":" + primarySkill.getKey()
+        + ":" + skills.getLevel(primarySkill) + ":" + skills.getRank(primarySkill)
+        + ":morto:" + safeHealth + ":" + safeEnergy + ":" + safeFome + ":" + safeSede);
+    sendGui("WORKER_DEAD:" + npcName);
+    sendGui("LOG: ☠️ " + npcName + " MORREU (Fome:" + safeFome + " Sede:" + safeSede + " HP:" + safeHealth + ")");
+
+    AID manager = resolveService("manager", "manager");
+    if (manager != null) {
+      ACLMessage msg = new ACLMessage(ACLMessage.INFORM);
+      msg.addReceiver(manager);
+      msg.setContent("WORKER_DEAD:" + npcName);
+      send(msg);
     }
   }
 

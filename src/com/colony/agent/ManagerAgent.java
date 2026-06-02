@@ -305,6 +305,11 @@ public class ManagerAgent extends ColonyAgentBase {
       handleWorkerFinish(content.substring("TASK_COMPLETE:".length()), sender, false);
     } else if (content.startsWith("TASK_TIMEOUT:")) {
       handleWorkerFinish(content.substring("TASK_TIMEOUT:".length()), sender, true);
+    } else if (content.startsWith("WORKER_DEAD:")) {
+      String deadWorker = content.substring("WORKER_DEAD:".length()).trim();
+      if (!deadWorker.isEmpty()) {
+        handleWorkerDeath(deadWorker);
+      }
     } else if (content.startsWith("TASK_REJECTED:")) {
       String taskId = content.split(":")[1];
       for (TaskEntry t : tasks) {
@@ -380,6 +385,29 @@ public class ManagerAgent extends ColonyAgentBase {
         minStock = MIN_STOCK_BALANCEADO;
         targetStock = TARGET_STOCK_BALANCEADO;
       }
+    }
+  }
+
+  private void handleWorkerDeath(String workerName) {
+    boolean removed = workers.removeIf(w -> w.name.equals(workerName));
+    reservedWorkerNames.remove(workerName);
+
+    for (TaskEntry task : tasks) {
+      if (!workerName.equals(task.worker)) {
+        continue;
+      }
+      if ("approved".equals(task.status)) {
+        continue;
+      }
+      task.worker = null;
+      task.status = "pending";
+      task.correctionRequired = true;
+      task.urgency = Math.min(MAX_URGENCY, Math.max(2, task.urgency));
+      sendToGui("TASK_STATUS:" + task.id + ":" + task.type + ":reaberta (trabalhador indisponível)");
+    }
+
+    if (removed) {
+      sendToGui("LOG:Gerente removeu trabalhador " + workerName + " (morto) e reabriu tarefas pendentes.");
     }
   }
 

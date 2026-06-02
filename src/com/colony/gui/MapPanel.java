@@ -133,6 +133,16 @@ public class MapPanel extends JPanel {
     repaint();
   }
 
+  public void removeNpcPosition(String npcId) {
+    npcPositions.remove(npcId);
+    npcColors.remove(npcId);
+    npcSpriteFrames.remove(npcId);
+    if (npcId != null && npcId.equals(selectedNpc)) {
+      selectedNpc = null;
+    }
+    repaint();
+  }
+
   public String getSelectedNpc() {
     return selectedNpc;
   }

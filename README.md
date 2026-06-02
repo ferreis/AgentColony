@@ -136,6 +136,7 @@ Atuadores:
 - Movimentação no mapa e execução de ações de trabalho.
 - Consumo/produção de recursos (`consume/add`).
 - Envio de status, conclusão/rejeição de tarefa e eventos para Manager/Analyst/GUI.
+- Emissão de evento explícito de morte (`WORKER_DEAD`) e status final `morto` antes do encerramento.
 - Auto-encerramento (`doDelete`) quando morre.
 
 Comportamentos principais:
@@ -194,7 +195,7 @@ Objetivo:
 
 Sensores:
 
-- Mensagens de workers: `REGISTER_WORKER`, `WORKER_INFO`, `TASK_COMPLETE`, `TASK_TIMEOUT`, `TASK_REJECTED`.
+- Mensagens de workers: `REGISTER_WORKER`, `WORKER_INFO`, `TASK_COMPLETE`, `TASK_TIMEOUT`, `TASK_REJECTED`, `WORKER_DEAD`.
 - Mensagens do analista: `VERIFICATION_RESULT`, `TERRAIN_ANALYSIS`, `COLONY_ANALYSIS`, `DEADLINE_REPORT`, `RESOURCE_ABUNDANCE_RESULT`.
 - Estado do ambiente: recursos, capacidade e construções concluídas/incompletas.
 
@@ -333,7 +334,7 @@ Objetivo:
 
 Sensores:
 
-- Mensagens ACL de múltiplos agentes (`WORKER_STATUS`, `WORKER_DETAILS`, `NPC_POSITION`, `TASK_STATUS`, `BUILD_UPDATE`, `UPDATE_RESOURCES`, `LOG`, `WORKER_ANALYSIS`, `TERRAIN_ANALYSIS`).
+- Mensagens ACL de múltiplos agentes (`WORKER_STATUS`, `WORKER_DEAD`, `WORKER_DETAILS`, `NPC_POSITION`, `TASK_STATUS`, `BUILD_UPDATE`, `UPDATE_RESOURCES`, `LOG`, `WORKER_ANALYSIS`, `TERRAIN_ANALYSIS`).
 
 Atuadores:
 
@@ -366,11 +367,11 @@ else if (content.startsWith("TASK_STATUS:")) gui.updateTask(...);
 Fluxos mais relevantes do sistema:
 
 - Worker -> Analyst: `REGISTER_SKILL`, `WORKER_INFO`
-- Worker -> Manager: `REGISTER_WORKER`, `WORKER_INFO`, `TASK_COMPLETE`, `TASK_TIMEOUT`, `TASK_REJECTED`
+- Worker -> Manager: `REGISTER_WORKER`, `WORKER_INFO`, `TASK_COMPLETE`, `TASK_TIMEOUT`, `TASK_REJECTED`, `WORKER_DEAD`
 - Manager -> Worker: `ASSIGN_TASK`
 - Manager -> Analyst: `VERIFY_TASK`, `TASK_QUEUE_REPORT`, `REQUEST_RESOURCE_ABUNDANCE`
 - Analyst -> Manager: `VERIFICATION_RESULT`, `COLONY_ANALYSIS`, `TERRAIN_ANALYSIS`, `DEADLINE_REPORT`, `RESOURCE_ABUNDANCE_RESULT`, `SCALE_ALERT`
-- Manager/Worker/Analyst/Wildlife -> GUI: `LOG`, `WORKER_STATUS`, `WORKER_DETAILS`, `TASK_STATUS`, `BUILD_UPDATE`, `UPDATE_RESOURCES`, `WORKER_ANALYSIS`, `TERRAIN_ANALYSIS`
+- Manager/Worker/Analyst/Wildlife -> GUI: `LOG`, `WORKER_STATUS`, `WORKER_DEAD`, `WORKER_DETAILS`, `TASK_STATUS`, `BUILD_UPDATE`, `UPDATE_RESOURCES`, `WORKER_ANALYSIS`, `TERRAIN_ANALYSIS`
 
 ## 2. Interface (GUI)
 
@@ -440,6 +441,12 @@ Cada trabalhador mantém:
 - Sede: 0 a 100
 
 Se HP <= 0, fome <= 0 ou sede <= 0, o trabalhador morre e executa doDelete().
+
+Fluxo de morte implementado:
+
+- Publica `WORKER_STATUS` final com status `morto` e atributos finais.
+- Publica `WORKER_DEAD:<nome>` para GUI e Manager.
+- Em seguida executa `doDelete()`.
 
 ### 4.2 Degradação e regeneração periódica
 
@@ -528,6 +535,15 @@ Para selecionar trabalhador:
 
 - O gerente trabalha com perfil de estoque (balanceado/agressivo/econômico).
 - Se recurso fica abaixo do mínimo, o gerente reforça automaticamente o estoque mínimo, respeitando a capacidade total disponível dos armazéns.
+
+### 5.4 Tratamento de trabalhador morto
+
+Ao receber `WORKER_DEAD` de um trabalhador:
+
+- Remove o trabalhador da lista ativa do gerente.
+- Remove o nome da reserva interna de criação.
+- Reabre tarefas não aprovadas que estavam atribuídas ao trabalhador morto.
+- Marca essas tarefas como `pending`, força correção e ajusta urgência mínima para 2.
 - Também cria tarefas de produção para buscar estoque-alvo (madeira, pedra/ferro, comida, vara de pesca), limitado pela capacidade total de armazenamento.
 
 ### 5.4 Capacidade de armazenamento por Armazém
