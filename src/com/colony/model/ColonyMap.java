@@ -106,12 +106,31 @@ public class ColonyMap {
           tiles[cy + dy][cx + dx] = TerrainTile.FLOOR;
       }
     }
+
+    clearWaterAroundSpawn(cx, cy, 24);
+
     // Já coloca um armazém inicial e um poço funcional para água.
     ColonyBuilding warehouse = addBuilding(cx - 8, cy - 2, BuildingType.WAREHOUSE);
     warehouse.setProgress(100);
 
     ColonyBuilding well = addBuilding(cx + 8, cy - 1, BuildingType.WELL);
     well.setProgress(100);
+  }
+
+  private void clearWaterAroundSpawn(int cx, int cy, int radius) {
+    for (int dy = -radius; dy <= radius; dy++) {
+      for (int dx = -radius; dx <= radius; dx++) {
+        int x = cx + dx;
+        int y = cy + dy;
+        if (!inBounds(x, y)) {
+          continue;
+        }
+        if (tiles[y][x] == TerrainTile.WATER) {
+          // Keep the region around spawn traversable to avoid water-ring seeds.
+          tiles[y][x] = TerrainTile.SAND;
+        }
+      }
+    }
   }
 
   // ─── Tile access ───
